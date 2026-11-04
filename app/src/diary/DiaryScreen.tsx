@@ -481,6 +481,18 @@ export function DiaryScreen({
   const [recordedError, setRecordedError] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState("");
+
+  const announceSaveStatus = useCallback((ok: boolean) => {
+    if (!r) return;
+    if (ok) {
+      setSaveStatus("Saved");
+      window.setTimeout(() => setSaveStatus(""), 1500);
+    } else {
+      setSaveStatus("Not saved");
+      window.setTimeout(() => setSaveStatus(""), 4000);
+    }
+  }, [r]);
   const [building, setBuilding] = useState(false);
   const [carryWip, setCarryWip] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -531,6 +543,7 @@ export function DiaryScreen({
       }
       setSavedAt(`Saved on phone · ${fmtTime(Date.now())}`);
       setSaveError(null);
+      announceSaveStatus(true);
     }, 400);
   }, []);
 
@@ -553,12 +566,14 @@ export function DiaryScreen({
     try {
       await db.reports.put({ ...r, updatedAt: Date.now() });
       setSaveError(null);
+      announceSaveStatus(true);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "storage problem";
       setSaveError(message);
+      announceSaveStatus(false);
     }
-  }, [r]);
+  }, [r, announceSaveStatus]);
 
   const update = useCallback(
     (patch: ((r0: Report) => Partial<Report>) | Partial<Report>) => {
@@ -1022,6 +1037,7 @@ export function DiaryScreen({
         <StickyBack onBack={() => { void leave(); goHome(); }}
         />
         <p role="status">Loading diary…</p>
+        <div className="sr-only" role="status" aria-live="polite">{saveStatus}</div>
       </div>
     );
 
@@ -1119,7 +1135,7 @@ export function DiaryScreen({
       <div
         className="summary-strip sticky z-30"
         style={{ top: "var(--header-h, 96px)" }}
-        aria-live="polite"
+
         data-testid="summary-strip"
       >
         <div className="px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold">
