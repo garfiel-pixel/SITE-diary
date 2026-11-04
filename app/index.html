@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en-JM">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0B0B0B" />
+    <!-- Same logo artwork as src/assets/brand/logo.jpg, started with the HTML
+         so it is not discovered only after React mounts (LCP). -->
+    <link rel="preload" as="image" href="/brand/logo.jpg" fetchpriority="high" />
+    <title>Pave-Con — Masterbuilders Site Diary</title>
+    <script>
+      // Pre-paint theme flag. This tiny localStorage key is the only
+      // non-Dexie store in the whole app (css-first paint, no flash).
+      (function () {
+        try {
+          var pref =
+            localStorage.getItem("pavecon-theme") || "auto"; /* auto | light | dark */
+          var dark =
+            pref === "dark" ||
+            (pref === "auto" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var el = document.documentElement;
+          if (dark) {
+            el.classList.add("dark");
+            el.dataset.theme = "dark";
+          } else {
+            el.dataset.theme = "light";
+          }
+        } catch (e) {
+          /* private mode: keep light */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

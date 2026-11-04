@@ -1,0 +1,33 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 400, height: 800 } });
+await page.goto("http://localhost:4173/");
+await page.getByLabel("Activation code character 1 of 12").click();
+await page.keyboard.type("PAVECON-DEMO", { delay: 5 });
+await page.getByRole("button", { name: "ACTIVATE" }).click();
+await page.waitForTimeout(500);
+await page.getByTestId("start-blank").click();
+await page.locator("#sec-equipment > h2 > button").click();
+await page.getByRole("button", { name: "Add Paver" }).click();
+const slider = page.locator('[role="slider"][aria-label="Paver hours"]');
+await slider.click({ position: { x: 30, y: 40 } });
+await page.locator('#sec-equipment button[aria-label*="open numpad"]').first().click();
+const sheet = page.getByRole("dialog", { name: "Number pad" });
+await sheet.getByRole("button", { name: "Delete", exact: true }).click();
+for (const k of ["1","2",".","5"]) await sheet.getByRole("button", { name: k, exact: true }).click();
+await sheet.getByRole("button", { name: "Done" }).click();
+console.log("slider", await slider.getAttribute("aria-valuenow"));
+const header = page.locator('#sec-materials > h2 > button');
+await header.click();
+await page.waitForTimeout(500);
+const btn = page.getByRole("button", { name: "Add Asphalt" });
+console.log("count", await btn.count(), "visible", await btn.first().isVisible().catch(e=>e.message));
+const b = await btn.first().boundingBox();
+console.log("box", b);
+await page.screenshot({ path: "../artifacts/debug-mat2.png" });
+try {
+  await btn.click({ timeout: 5000 });
+  console.log("clicked OK");
+} catch (e) { console.log("CLICK FAIL", e.message.split("\n").slice(0,6).join(" | ")); }
+console.log("materials text", (await page.locator("#sec-materials").innerText()).slice(0,200));
+await browser.close();

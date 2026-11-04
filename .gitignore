@@ -1,0 +1,20 @@
+# Dependencies
+app/node_modules/
+
+# Generated output and test evidence (regenerate with npm run verify)
+app/dist/
+app/test-results/
+app/playwright-report/
+artifacts/
+test-results/
+playwright-report/
+
+# Local tooling / agent state
+.freebuff/
+*.log
+.DS_Store
+
+# Local environment
+.env
+.env.*
+!.env.example

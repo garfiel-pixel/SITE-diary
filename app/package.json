@@ -1,0 +1,45 @@
+{
+  "name": "pavecon-site-diary",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "make-icons": "node scripts/make-icons.mjs",
+    "make-fonts": "node scripts/make-fonts.mjs",
+    "make-fixtures": "node scripts/make-fixtures.mjs",
+    "artifacts": "node scripts/artifacts.mjs",
+    "lighthouse": "node scripts/lighthouse.mjs",
+    "test:e2e": "playwright test",
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "5.3.0",
+    "@fontsource/barlow-condensed": "5.3.0",
+    "dexie": "4.4.7",
+    "dexie-react-hooks": "4.4.0",
+    "konsta": "5.5.0",
+    "pdfmake": "0.3.13",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@napi-rs/canvas": "1.1.0",
+    "@playwright/test": "1.64.1",
+    "@tailwindcss/vite": "4.3.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
+    "lighthouse": "13.6.0",
+    "pdfjs-dist": "6.5.438",
+    "sharp": "0.35.5",
+    "tailwindcss": "4.3.4",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vite-plugin-pwa": "2.0.0",
+    "workbox-window": "7.4.1"
+  }
+}
