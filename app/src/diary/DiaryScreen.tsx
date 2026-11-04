@@ -2,7 +2,8 @@
    and action bar. All "less work" features live here. */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { type LossKey, type Unit, type WeatherKey } from "../config";
+import { CONFIG } from "../config";
+import type { LossKey, Unit, WeatherKey } from "../config";
 import {
   db,
   lastReportBefore,
@@ -20,7 +21,8 @@ import {
 } from "../db";
 import { fmtDay, fmtFull, fmtTime, fmtBytes, fmtHours } from "../lib/format";
 import { SEED } from "../seed";
-import { flush } from "../sync";
+import { registerFlush, clearFlush, flushNow } from "../lib/autosave";
+import { goHome } from "../lib/route";
 import { Icon } from "../icons";
 import {
   SectionCard,
@@ -102,7 +104,43 @@ function toggle(
 /* =================== small building blocks =================== */
 
 /** Date navigation — available before a report exists too (6.3). */
-function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }) {
+function StickyBack({ onBack }: { onBack: () => void }) {
+  return (
+    <div
+      className="sticky top-0 z-40"
+      style={{
+        background: "var(--band)",
+        color: "var(--on-band)",
+        padding: "8px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <button
+        type="button"
+        className="btn-56"
+        aria-label="Back to home"
+        data-testid="sticky-back"
+        onClick={onBack}
+      >
+        <Icon name="chevronLeft" size={22} />
+      </button>
+      <h1
+        className="font-display text-base leading-[1.05]"
+        style={{ color: "var(--on-band)" }}
+      >
+        {CONFIG.formTitle}
+      </h1>
+    </div>
+  );
+}
+
+  const leave = useCallback(async () => {
+    await flushNow();
+  }, []);
+
+  function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -112,7 +150,10 @@ function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }
           aria-label="Previous day"
           onClick={() => {
             tick();
-            withTransition(() => onDate(shiftDate(date, -1)));
+            withTransition(() => {
+              onDate(shiftDate(date, -1));
+              void leave();
+            });
           }}
         >
           ‹
@@ -131,7 +172,10 @@ function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }
           aria-label="Next day"
           onClick={() => {
             tick();
-            withTransition(() => onDate(shiftDate(date, 1)));
+            withTransition(() => {
+              onDate(shiftDate(date, 1));
+              void leave();
+            });
           }}
         >
           ›
@@ -143,6 +187,7 @@ function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }
         onClick={() => {
           tick();
           onDate(todayISO());
+          void leave();
         }}
       >
         Today
@@ -445,6 +490,16 @@ export function DiaryScreen({
   const [otherSheet, setOtherSheet] = useState<null | "equipment" | "material" | "visitor">(null);
   const savedTimer = useRef<number | undefined>(undefined);
 
+  registerFlush(async () => {
+    if (!r) return;
+    await db.reports.put({ ...r, updatedAt: Date.now() });
+  });
+  useEffect(() => {
+    return () => {
+      clearFlush();
+    };
+  }, []);
+
   /* ---- load for date ---- */
   useEffect(() => {
     let alive = true;
@@ -480,6 +535,15 @@ export function DiaryScreen({
       setSavedAt(`Saved on phone · ${fmtTime(Date.now())}`);
     }, 400);
   }, []);
+
+  const leave = useCallback(async () => {
+    await flushNow();
+  }, []);
+
+  const reload = useCallback(async () => {
+    await leave();
+    window.location.reload();
+  }, [leave]);
 
   const update = useCallback(
     (patch: ((r0: Report) => Partial<Report>) | Partial<Report>) => {
@@ -851,7 +915,7 @@ export function DiaryScreen({
       withTransition(() => setPdfSheet({ name: out.name, bytes: out.bytes, pages: out.pages }));
       tick();
       // The report is queued for the mock upload; try now if we are online.
-      void flush();
+      await flushNow();
     } catch (err) {
       setPdfError(
         err instanceof Error ? err.message : "Could not create the PDF. Try again."
@@ -939,16 +1003,19 @@ export function DiaryScreen({
   /* ==================== render ==================== */
   if (mode === "loading")
     return (
-      <p className="p-6 text-sm" style={{ color: "var(--muted)" }}>
-        Loading diary…
-      </p>
+      <div className="p-6 text-sm" style={{ color: "var(--muted)" }}>
+        <StickyBack onBack={() => { void leave(); goHome(); }}
+        />
+        <p role="status">Loading diary…</p>
+      </div>
     );
 
   if (mode === "empty") {
     return (
       <div className="p-4 max-w-3xl mx-auto">
+        <StickyBack onBack={() => { void leave(); goHome(); }} />
         <div className="card p-4" id="newday-card">
-          <h2 className="font-display text-2xl mb-1">New day</h2>
+          <h2 className="font-display text-2xl mb-1">No report for this date yet</h2>
           <p className="text-sm mb-2" style={{ color: "var(--muted)" }}>
             {fmtFull(date)} · {fmtDay(date)}
           </p>
@@ -968,7 +1035,10 @@ export function DiaryScreen({
                   color: "var(--on-accent)",
                   border: 0,
                 }}
-                onClick={copyFromPrev}
+                onClick={() => {
+                  copyFromPrev();
+                  void leave();
+                }}
               >
                 Copy from {fmtDay(prev.date)} ({fmtFull(prev.date).split(", ")[1]}) →
               </button>
@@ -989,8 +1059,11 @@ export function DiaryScreen({
               </p>
             </>
           ) : null}
-          <button type="button" data-testid="start-blank" className="chip" onClick={startBlank}>
-            Start blank page
+          <button type="button" data-testid="start-blank" className="chip" onClick={() => {
+            startBlank();
+            void leave();
+          }}>
+            Start a blank report
           </button>
         </div>
       </div>
