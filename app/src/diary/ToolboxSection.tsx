@@ -1,29 +1,39 @@
-/* Toolbox talk (§9): topic + presenter (memo-backed), auto time, register
-   toggle chips, notes with hazard chips. Whole section optional. */
+/* Toolbox talk (§9): topic + presenter (memo-backed), auto time, attendance
+   drawn from the named workforce, notes with hazard chips. Optional. */
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { SheetWrap } from "../components/SheetWrap";
-import { db, bumpMemo, type Toolbox } from "../db";
+import { bumpMemo, db, type Toolbox, type WorkforcePerson } from "../db";
 import { Icon } from "../icons";
 import { Lined } from "../components/core";
 import { fmtTime } from "../lib/format";
+import { personName } from "../lib/workforce";
 import { tick } from "../lib/haptics";
 
 const HAZARD_CHIPS = ["PPE", "Traffic", "Heat", "Slips", "Plant movement", "Dust", "Noise"];
 
 export function ToolboxSection({
   toolbox,
+  people,
   onChange,
+  onOpenWorkforce,
 }: {
   toolbox: Toolbox | null;
+  people: WorkforcePerson[];
   onChange: (t: Toolbox | null) => void;
+  onOpenWorkforce: () => void;
 }) {
-  const [regSheet, setRegSheet] = useState(false);
-  const [newName, setNewName] = useState("");
-
   const topics = useLiveQuery(() => db.memo.where("kind").equals("topic").toArray(), []);
   const presenters = useLiveQuery(() => db.memo.where("kind").equals("presenter").toArray(), []);
-  const register = useLiveQuery(() => db.register.toArray(), []) ?? [];
+  const personNames = [...new Set(people.map((p) => p.name.trim()).filter(Boolean))];
+  const presenterOptions = [
+    ...new Set([
+      ...personNames,
+      ...(presenters ?? [])
+        .slice()
+        .sort((a, b) => b.uses - a.uses)
+        .map((m) => m.value),
+    ]),
+  ].slice(0, 3);
 
   if (!toolbox)
     return (
@@ -39,7 +49,7 @@ export function ToolboxSection({
             tick();
             onChange({
               topic: "",
-              presenter: "",
+              presenter: personNames[0] ?? "",
               time: fmtTime(Date.now()),
               presentIds: [],
               notes: "",
@@ -50,13 +60,15 @@ export function ToolboxSection({
         </button>
       </div>
     );
+
   const t = toolbox;
   const presentSet = new Set(t.presentIds);
+  const presentCount = people.filter((p) => presentSet.has(p.id)).length;
   const set = (patch: Partial<Toolbox>) => onChange({ ...t, ...patch });
 
   const toggleAll = (all: boolean) => {
     tick();
-    set({ presentIds: all ? register.map((r) => r.id) : [] });
+    set({ presentIds: all ? people.map((p) => p.id) : [] });
   };
 
   return (
@@ -103,25 +115,21 @@ export function ToolboxSection({
             Presenter
           </label>
           <div className="flex gap-2 flex-wrap mb-1">
-            {(presenters ?? [])
-              .slice()
-              .sort((a, b) => b.uses - a.uses)
-              .slice(0, 3)
-              .map((m) => (
-                <button
-                  key={m.value}
-                  type="button"
-                  className={`chip ${t.presenter === m.value ? "on" : ""}`}
-                  aria-pressed={t.presenter === m.value}
-                  onClick={() => {
-                    tick();
-                    set({ presenter: m.value });
-                    void bumpMemo("presenter", m.value);
-                  }}
-                >
-                  {m.value}
-                </button>
-              ))}
+            {presenterOptions.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={`chip ${t.presenter === name ? "on" : ""}`}
+                aria-pressed={t.presenter === name}
+                onClick={() => {
+                  tick();
+                  set({ presenter: name });
+                  void bumpMemo("presenter", name);
+                }}
+              >
+                {name}
+              </button>
+            ))}
           </div>
           <input
             id="tb-pres"
@@ -148,49 +156,66 @@ export function ToolboxSection({
       </div>
 
       <div>
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <span className="font-display text-lg flex-1">
-            Present <span className="num">{t.presentIds.length} of {register.length}</span>
+            Present{" "}
+            <span className="num">
+              {presentCount} of {people.length}
+            </span>
           </span>
-          <button type="button" className="chip" onClick={() => toggleAll(true)}>
-            All
+          <button
+            type="button"
+            className="chip !min-h-10"
+            onClick={() => toggleAll(true)}
+            disabled={people.length === 0}
+          >
+            All present
           </button>
-          <button type="button" className="chip" onClick={() => toggleAll(false)}>
+          <button
+            type="button"
+            className="chip !min-h-10"
+            onClick={() => toggleAll(false)}
+          >
             None
-          </button>
-          <button type="button" className="chip ghost" onClick={() => setRegSheet(true)}>
-            <Icon name="plus" size={16} /> Name
           </button>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {register.map((r) => {
-            const on = presentSet.has(r.id);
+          {people.map((person) => {
+            const on = presentSet.has(person.id);
+            const name = personName(person);
             return (
               <button
-                key={r.id}
+                key={person.id}
                 type="button"
                 className={`chip ${on ? "on" : ""}`}
                 aria-pressed={on}
-                aria-label={`${r.name} ${on ? "present" : "absent"}`}
+                aria-label={`${name}, ${person.role}: ${on ? "present" : "absent"}`}
+                title={`${name} — ${person.role}`}
                 onClick={() => {
                   tick();
                   const ids = new Set(t.presentIds);
-                  if (on) ids.delete(r.id);
-                  else ids.add(r.id);
+                  if (on) ids.delete(person.id);
+                  else ids.add(person.id);
                   set({ presentIds: [...ids] });
                 }}
               >
                 {on && <Icon name="check" size={14} />}
-                {r.name}
+                {name}
               </button>
             );
           })}
-          {register.length === 0 && (
-            <span className="text-sm" style={{ color: "var(--muted)" }}>
-              Add crew names to track presence.
-            </span>
+          {people.length === 0 && (
+            <button type="button" className="chip ghost" onClick={onOpenWorkforce}>
+              <Icon name="plus" size={16} /> Add people in Workforce
+            </button>
           )}
         </div>
+        {people.length > 0 && (
+          <p className="text-xs mt-2" style={{ color: "var(--muted)" }}>
+            Attendance uses the named workforce. Remove someone there and they leave this
+            register too.
+          </p>
+        )}
       </div>
 
       <Lined
@@ -200,68 +225,6 @@ export function ToolboxSection({
         chips={HAZARD_CHIPS}
         lines={2}
       />
-
-      {/* add name sheet */}
-      <AddNameSheet
-        opened={regSheet}
-        onClosed={() => setRegSheet(false)}
-        title="Add a name to the register"
-        value={newName}
-        onValue={setNewName}
-        add={() => {
-          if (newName.trim())
-            void db.register.put({ id: crypto.randomUUID(), name: newName.trim() });
-          setNewName("");
-          setRegSheet(false);
-        }}
-      />
     </div>
-  );
-}
-
-/* Bottom sheet for the register add-name. Kept local to this file. */
-function AddNameSheet({
-  opened,
-  onClosed,
-  title,
-  value,
-  onValue,
-  add,
-}: {
-  opened: boolean;
-  onClosed: () => void;
-  title: string;
-  value: string;
-  onValue: (v: string) => void;
-  add: () => void;
-}) {
-  return (
-    <SheetWrap opened={opened} onClosed={onClosed} label={title}>
-      <div className="p-4">
-        <span className="font-display text-2xl mb-3 block">{title}</span>
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          className="btn-56 w-full px-4 text-left mb-3"
-          aria-label={title}
-        />
-        <button
-          type="button"
-          className="w-full font-display text-xl"
-          style={{
-            minHeight: 64,
-            borderRadius: 14,
-            background: "var(--accent)",
-            color: "var(--on-accent)",
-            border: 0,
-          }}
-          onClick={add}
-        >
-          Done
-        </button>
-      </div>
-    </SheetWrap>
   );
 }

@@ -17,10 +17,15 @@ export interface MaterialRow {
   qty: number;
   unit: Unit;
 }
-export interface Crew {
+export interface WorkforcePerson {
   id: string;
   name: string;
-  count: number;
+  role: string;
+}
+export interface Workforce {
+  groups: [string, string];
+  a: WorkforcePerson[];
+  b: WorkforcePerson[];
 }
 export interface Toolbox {
   topic: string;
@@ -39,7 +44,7 @@ export interface Report {
   timeLost: { reason: LossKey | null; hours: number };
   equipment: EquipmentRow[];
   materials: MaterialRow[];
-  workforce: { groups: [string, string]; a: Crew[]; b: Crew[] };
+  workforce: Workforce;
   wip: string;
   visitors: string;
   instructions: string;
@@ -91,7 +96,90 @@ export class DiaryDB extends Dexie {
       memo: "[kind+value], kind, uses, lastUsed",
       settings: "key",
     });
+
+    /* v1 stored one row per role plus a headcount. v2 stores one row per
+       person. Expand old counts honestly as unnamed people, keeping the first
+       person's id so existing toolbox attendance still points at a real row. */
+    this.version(2)
+      .stores({
+        reports: "id, date, syncState, updatedAt",
+        photos: "id, reportId, groupId",
+        register: "id, &name",
+        memo: "[kind+value], kind, uses, lastUsed",
+        settings: "key",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("reports")
+          .toCollection()
+          .modify((report: LegacyReport) => {
+            const wf = report.workforce;
+            if (!wf) return;
+            const idMap = new Map<string, string>();
+
+            const people = (rows: LegacyCrew[] | undefined): WorkforcePerson[] => {
+              const out: WorkforcePerson[] = [];
+              for (const row of rows ?? []) {
+                const oldId = row.id ?? crypto.randomUUID();
+                if (typeof row.count === "number" && !row.role) {
+                  const count = Math.max(0, Math.floor(row.count));
+                  for (let i = 0; i < count; i++) {
+                    const id = i === 0 ? oldId : `${oldId}~${i}`;
+                    out.push({
+                      id,
+                      name: "",
+                      role: (row.name ?? "").trim() || "Unknown role",
+                    });
+                  }
+                  if (count > 0) idMap.set(oldId, oldId);
+                } else {
+                  out.push({
+                    id: oldId,
+                    name: (row.name ?? "").trim(),
+                    role: (row.role ?? "").trim() || "Unknown role",
+                  });
+                  idMap.set(oldId, oldId);
+                }
+              }
+              return out;
+            };
+
+            const groups = wf.groups;
+            const a = people(wf.a);
+            const b = people(wf.b);
+            report.workforce = {
+              groups: [
+                typeof groups?.[0] === "string" ? groups[0] : "Own crew",
+                typeof groups?.[1] === "string" ? groups[1] : "Subcontractors",
+              ],
+              a,
+              b,
+            };
+
+            if (report.toolbox?.presentIds) {
+              const ids = new Set([...a, ...b].map((p) => p.id));
+              report.toolbox.presentIds = report.toolbox.presentIds
+                .map((id) => idMap.get(id) ?? id)
+                .filter((id) => ids.has(id));
+            }
+          });
+      });
   }
+}
+
+interface LegacyCrew {
+  id?: string;
+  name?: string;
+  role?: string;
+  count?: number;
+}
+interface LegacyReport {
+  workforce?: {
+    groups?: [string, string];
+    a?: LegacyCrew[];
+    b?: LegacyCrew[];
+  };
+  toolbox?: { presentIds?: string[] } | null;
 }
 
 export const db = new DiaryDB();

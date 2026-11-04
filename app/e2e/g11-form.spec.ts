@@ -52,8 +52,11 @@ test.describe("G11 — form completeness (400 × 800)", () => {
     expect(report!.project).toBe("Hatfield Road Rehabilitation");
     expect(report!.site).toBe("Chainage 0+400 to 0+900");
     expect(report!.equipment).toHaveLength(4);
-    expect((report!.workforce as { a: unknown[] }).a).toHaveLength(6);
+    expect((report!.workforce as { a: unknown[] }).a).toHaveLength(18);
     expect((report!.workforce as { b: unknown[] }).b).toHaveLength(1);
+    expect(
+      (report!.workforce as { a: { name: string; role: string }[] }).a[0]
+    ).toMatchObject({ name: "Andre Brown", role: "Supervisor" });
     expect(report!.weather).toEqual({ am: null, pm: null });
     expect(report!.timeLost).toEqual({ reason: null, hours: 0 });
     expect(report!.materials).toEqual([]);
@@ -93,11 +96,11 @@ test.describe("G11 — form completeness (400 × 800)", () => {
     await expect(strip).toContainText("Deliveries 1");
 
     await openSection(page, "sec-workforce");
-    const workforce = page.locator("#sec-workforce");
-    await workforce.getByRole("button", { name: "More…" }).click();
-    const catalogue = page.getByRole("dialog", { name: "Full catalogue" });
-    await catalogue.getByRole("button", { name: "Mason", exact: true }).click();
-    await expect(strip).toContainText(/People\s+21/);
+    await page.getByTestId("add-person").click();
+    await page.getByTestId("person-name").fill("Mason Test");
+    await page.getByTestId("person-role").fill("Mason");
+    await page.getByTestId("save-person").click();
+    await expect(strip).toContainText(/People\s+20/);
 
     await openSection(page, "sec-equipment");
     const paver = page.locator('[role="slider"][aria-label="Paver hours"]');

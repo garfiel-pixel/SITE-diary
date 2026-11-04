@@ -30,7 +30,7 @@ when the URL has `?demo`; the production build never shows it by default.
 ## Gates
 
 ```bash
-npm run test:e2e     # Playwright gates G3, G4, G5, G6, G7, G8, G10, G11, G12 + typing audit
+npm run test:e2e     # Playwright gates G3–G8, G10–G12, G14 + typing audit
 npm run verify       # one command: build (G0), logo hash (G1), all tests, artifacts (G2),
                      # Lighthouse (G9), and the final G13 table
 ```
@@ -38,11 +38,11 @@ npm run verify       # one command: build (G0), logo hash (G1), all tests, artif
 `npm run verify` writes evidence to `../artifacts/` and prints a gate table. The full
 report is `../artifacts/gates.txt`. Every gate must pass for the command to exit 0.
 
-Latest evidence (3 Nov 2026):
+Latest evidence (4 Nov 2026):
 
 | Gate | Result | Evidence |
 |---|---|---|
-| G0 build / pinned deps / ≤180 KB initial JS | PASS (119.5 KB gzip) | `artifacts/bundle.txt` |
+| G0 build / pinned deps / ≤180 KB initial JS | PASS (121.6 KB gzip) | `artifacts/bundle.txt` |
 | G1 logo byte-for-byte | PASS | `artifacts/g1-logo.txt` |
 | G2 icon sheet, no hard-coded colours | PASS | `artifacts/icons.png` |
 | G3 persistence online + offline | PASS | `artifacts/playwright.json` |
@@ -55,6 +55,7 @@ Latest evidence (3 Nov 2026):
 | G10 tape/keys/hold/numpad/stepper | PASS | `artifacts/playwright.json` |
 | G11 form completeness, no overflow, CLS | PASS | `artifacts/playwright.json` |
 | G12 reduced motion + long-task trace | PASS | `artifacts/playwright.json` |
+| G14 named workforce + v1 migration | PASS | `artifacts/playwright.json`, `g14-named-workforce.pdf` |
 | G13 final regression | PASS | `artifacts/gates.txt` |
 
 Typing audit (sample-equivalent report on a new day): **11 taps, 0 typed
@@ -64,20 +65,23 @@ characters** (target ≤ 25 taps / ≤ 40 characters).
 
 1. Open the deployed URL (or `npm run preview`), type `PAVECON-DEMO`, **Activate**.
    The app opens on today's new day.
-2. Tap **Copy from Monday (2 November 2026)**. Project, site, crew and equipment
-   are carried; the Undo snackbar appears for 6 s.
-3. Open **Weather**, tap **A.M. Clear** and **P.M. Showers**. Add two **Work in
+2. Tap **Copy from Monday (2 November 2026)**. Project, site, named crew and
+   equipment are carried; the Undo snackbar appears for 6 s.
+3. Open **Workforce**. Switch between **Own crew** and **Subcontractors**, show the
+   named rows and derived role totals, then tap **Add person** to add someone by name
+   and role. **Rename** edits the group labels.
+4. Open **Weather**, tap **A.M. Clear** and **P.M. Showers**. Add two **Work in
    progress** chips (Milling, Asphalt laying). Tap **Use K. Johnson?**.
-4. Open **Equipment**, drag the Paver ruler or use −/+. The marker follows, the
+5. Open **Equipment**, drag the Paver ruler or use −/+. The marker follows, the
    summary strip updates, the status chips go ✓.
-5. Open **Photos**, choose 3 gallery photos (or use the seeded sample). Select two,
+6. Open **Photos**, choose 3 gallery photos (or use the seeded sample). Select two,
    tap **Describe selected**, apply “Progress — asphalt laying”. The PDF prints one
    caption for the pair.
-6. Tap **Create PDF**. The result sheet shows the file name, size and page count.
+7. Tap **Create PDF**. The result sheet shows the file name, size and page count.
    Use **Share / Send** (phones) or **Save to phone**.
-7. Turn the network off, reload. The service worker serves the app; the report is
+8. Turn the network off, reload. The service worker serves the app; the report is
    still there and its state reads **Saved on phone**.
-8. Turn the network on. The state moves **Uploading → Uploaded** (a mock uploader).
+9. Turn the network on. The state moves **Uploading → Uploaded** (a mock uploader).
    This is a stand-in for a real endpoint.
 
 Install on a phone: Chrome/Edge shows **Install this app** in Settings. On iPhone use
@@ -89,8 +93,9 @@ Share → **Add to Home Screen** and leave **Open as Web App** on.
 src/
   config.ts            single source of truth: brand, company, features
   db.ts                Dexie schema, memo/usage, settings, boot recovery
-  seed.ts              paving catalogues + fictional sample report/photos
-  diary/               the form, photos, toolbox talk
+  seed.ts              paving catalogues + fictional sample report, people and photos
+  diary/               the form, named workforce, photos, toolbox talk
+  lib/workforce.ts     named-people and derived role-total helpers
   components/core.tsx  tape slider, numpad, stepper, lined text, cards, chips
   icons/index.tsx      custom 70-icon SVG set (24 px + 48 px duotone)
   pdf/                 pdfmake 0.3 build + self-hosted fonts + logo base64

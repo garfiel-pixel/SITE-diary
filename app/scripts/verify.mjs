@@ -108,7 +108,7 @@ if (!fs.existsSync(fixtures) || fs.readdirSync(fixtures).filter((f) => f.endsWit
 }
 
 // ------------------------------------------------------ Playwright ------
-console.log("\n== G3-G12 Playwright ==");
+console.log("\n== G3-G14 Playwright ==");
 const jsonPath = path.join(ART, "playwright.json");
 const pw = run("npx", ["playwright", "test", "--reporter=json"], {
   env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: jsonPath },
@@ -203,7 +203,7 @@ record(
 );
 
 // ---------------------------------------------------------- G13 --------
-const gateOrder = ["G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12"];
+const gateOrder = ["G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "G14"];
 const prior = new Map(results.map((r) => [r.gate, r]));
 const allOk =
   gateOrder.every((g) => prior.get(g)?.ok) &&

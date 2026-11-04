@@ -1,29 +1,32 @@
 # NOTES — assumptions, verification and scope
 
-## Next session — workforce by name (documented 4 Nov 2026, not built)
+## Workforce by name — implemented 4 Nov 2026
 
-**Current state:** Workforce stores a role plus a headcount (`Crew { name, count }`).
-That is why the diary can say “5 steel fixers” but cannot record which steel fixers were
-on site. The client has clarified that names matter more than the role count.
+The diary now records **people first**, with a role on each person:
 
-**Required next session (P11, directive §21):**
+- Two large tabs, **Own crew** and **Subcontractors**. Group names are editable from
+  **Rename**. Each tab shows its live count and derived role totals.
+- **Add person** opens a sheet with **Name** and **Role** only. One row is one person.
+  The role input is a native combobox backed by the memo-ranked trade catalogue and
+  quick role chips. Duplicate names are allowed; ids keep rows distinct.
+- Rows can be edited through **Edit person** and removed with the existing 6 s Undo.
+  Undo restores the tab and position. Removing a person also clears their toolbox
+  attendance.
+- Copy-from-yesterday carries names, roles and groups with fresh ids. The sticky
+  People total and section summary are derived from the rows.
+- Toolbox-talk attendance now uses the same named people instead of a separate
+  `register`.
+- The PDF prints both groups as name/role tables, derived role totals and the people
+  total. The toolbox PDF prints the present names.
+- Existing v1 reports are upgraded in Dexie v2. Each old `{ role, count }` row expands
+  to that many **Unnamed** people with the old role, never invented names. The section
+  summary shows `N named · U unnamed` while those rows remain. The first expanded id
+  keeps old toolbox attendance valid.
 
-- Two tabs, **Own crew** and **Subcontractors** (group labels stay editable).
-- **Add person** opens a sheet with **Name** and **Role** only. One row = one person.
-- Role totals and people totals are derived from the named rows; there is no separate
-  headcount entry.
-- Edit/remove people with the existing 6 s Undo. Copy-from-yesterday carries names,
-  roles and groups so names are not retyped each day.
-- Toolbox-talk attendance uses the same named people. The PDF prints `Name — Role`,
-  role totals and the total people count.
-- Existing saved reports migrate honestly: old count rows expand to unnamed people
-  (`Unnamed — Role`), never invented names. The seeded sample is replaced with
-  fictional named people.
-- Gate **G14** covers add/switch/edit/remove/Undo/persistence/copy/PDF/axe/overflow and
-  the typing audit. Full acceptance criteria are in the directive.
-
-**Do not ship this as done until** `npm run verify` exits 0 with G14 included and the
-refreshed G5/G11 evidence. The current demo still has the old role-count behaviour.
+**Verified 4 Nov 2026:** G14 (two Playwright tests: fresh named flow and v1 migration)
+passes; G5/G11 refreshed; full `npm run verify` exits 0 with G0–G14 PASS. Initial JS
+121.6 KB gzip; Lighthouse 100 / 98 / 96, installable; typing audit unchanged at 11 taps
+and 0 typed characters.
 
 ## Logo
 
@@ -51,7 +54,7 @@ refreshed G5/G11 evidence. The current demo still has the old role-count behavio
 - Sample photos are neutral placeholders generated in code (diagonal bands +
   label); no stock photography or third-party imagery.
 
-## VERIFY results (against installed packages, 3 Nov 2026)
+## VERIFY results (against installed packages, 4 Nov 2026)
 
 | Item | Result |
 |---|---|
@@ -71,9 +74,12 @@ refreshed G5/G11 evidence. The current demo still has the old role-count behavio
 - Autosave debounces 400 ms and writes the whole report. There is no Save button.
 - One report per date. Copying yesterday creates the day's row immediately; Undo
   deletes it.
-- Deleting a row/photo is immediate with a 6 s Undo that restores the item at its
-  original position (no “Are you sure?” dialog).
-- “Copy from yesterday” carries project, site, workforce and equipment. Weather,
+- Deleting a row/person/photo is immediate with a 6 s Undo that restores the item at
+  its original position (no “Are you sure?” dialog). People are one row per person;
+  role totals are derived, never stored.
+- Legacy role-count rows expand to unnamed people in the Dexie v2 upgrade. The UI
+  labels them **Unnamed** and never pretends they are named.
+- “Copy from yesterday” carries project, site, named workforce and equipment. Weather,
   time lost, materials, visitors, instructions, toolbox, photos and recorded-at are
   always left behind. Work in progress is carried only when the
   “Include work in progress” chip is on.
@@ -108,7 +114,8 @@ refreshed G5/G11 evidence. The current demo still has the old role-count behavio
 - `icons.png` — every icon at 24/48 px, light and dark.
 - `light-400.png`, `dark-400.png`, `light-1280.png`, `dark-1280.png` — viewport
   screenshots of the sample report.
-- `sample-site-diary.pdf`, `stress-site-diary.pdf`, `pdf-gate.txt`, `pdf-page1.png`.
+- `sample-site-diary.pdf`, `stress-site-diary.pdf`, `g14-named-workforce.pdf`,
+  `pdf-gate.txt`, `pdf-page1.png`.
 - `lighthouse.txt`, `lighthouse.json`, `pwa.txt`.
 - `playwright.json` — raw gate results; `gates.txt` — final table.
 - `fixtures/` — 30 synthetic 12 MP JPEGs (including EXIF orientation 6).
@@ -117,9 +124,13 @@ refreshed G5/G11 evidence. The current demo still has the old role-count behavio
 
 - G4 verifies each stored blob ≤ 500 KB, long edge ≤ 1600 px, and that the four
   EXIF orientation-6 fixtures decode portrait. Measured output: 56–64 KB each.
-- G5 sample: 1 page / ~389 KB. Stress (30 photos): 6 pages / ~1.6 MB, text on every
-  page contains the recorded-by footer, page counter and header. Page 1 is rendered
-  to `pdf-page1.png` and visually confirmed to use the supplied artwork.
+- G5 sample: 2 pages / ~402 KB (19 named people). Stress (30 photos): 6 pages /
+  ~1.69 MB, text on every page contains the recorded-by footer, page counter and
+  header. Page 1 is rendered to `pdf-page1.png` and visually confirmed to use the
+  supplied artwork.
+- G14: named add/edit/remove/Undo/reload/copy-forward/toolbox/PDF/axe/overflow, plus a
+  v1 IndexedDB migration test. The fresh flow ends at 21 people; the migration expands
+  3 Raker + 2 Steel fixer into five unnamed rows and keeps toolbox attendance.
 - G8 runs axe WCAG 2.0/2.1/2.2 A/AA on gate, sample form, blank form, toolbox,
   photos, result sheet and settings, light and dark: 0 serious/critical.
 - G9 mobile Lighthouse: Performance 100, Accessibility 98, Best Practices 96;
@@ -128,5 +139,5 @@ refreshed G5/G11 evidence. The current demo still has the old role-count behavio
   0.00001 s, and no view transition is called. Normal motion: 0.18 s / 0.25 s and
   one view transition. A 3 s drag at 4× CPU throttle has no long task over 50 ms.
 - Typing audit: 11 taps, 0 typed characters.
-- G0 initial JS is 119.5 KB gzip (budget 180 KB), excluding lazy pdfmake and the
+- G0 initial JS is 121.6 KB gzip (budget 180 KB), excluding lazy pdfmake and the
   font chunks. The PDF chunk is precached for offline use.

@@ -3,6 +3,7 @@
 import { CONFIG, type Unit } from "../config";
 import type { Report, PhotoRow } from "../db";
 import { fmtDate, fmtDay } from "../lib/format";
+import { allPeople, personName, roleSummary } from "../lib/workforce";
 import { vfs } from "./pdfFonts";
 
 /* font families: all four variants must exist */
@@ -236,30 +237,59 @@ export async function buildPdf(r: Report, photos: PhotoRow[]): Promise<PdfResult
     );
   }
 
-  if (recordedCrewCount(r) > 0) {
+  const workforcePeople = allPeople(r.workforce);
+  if (workforcePeople.length > 0) {
+    const groups = [
+      { name: r.workforce.groups[0], people: r.workforce.a },
+      { name: r.workforce.groups[1], people: r.workforce.b },
+    ].filter((group) => group.people.length > 0);
+
     content.push(
-      H("sec-workforce", "Workforce"),
+      H("sec-workforce", `Workforce — ${workforcePeople.length} people`),
       {
-        layout: "lightHorizontalLines",
-        table: {
-          headerRows: 1,
-          dontBreakRows: true,
-          body: [
-            [
-              { text: r.workforce.groups[0], bold: true },
-              { text: r.workforce.groups[1], bold: true },
-            ],
-            [
-              r.workforce.a
-                .map((c) => `${c.name} ×${c.count}`)
-                .join(", ") || "—",
-              r.workforce.b
-                .map((c) => `${c.name} ×${c.count}`)
-                .join(", ") || "—",
-            ],
+        columns: groups.map((group) => ({
+          width: "*",
+          stack: [
+            {
+              text: `${group.name} — ${group.people.length}`,
+              bold: true,
+              fontSize: 10,
+              margin: [0, 0, 0, 3],
+            },
+            {
+              layout: "lightHorizontalLines",
+              table: {
+                headerRows: 1,
+                widths: ["*", 82],
+                dontBreakRows: true,
+                body: [
+                  [
+                    { text: "Name", bold: true },
+                    { text: "Role", bold: true },
+                  ],
+                  ...[...group.people]
+                    .sort(
+                      (a, b) =>
+                        a.role.localeCompare(b.role) ||
+                        personName(a).localeCompare(personName(b))
+                    )
+                    .map((person) => [
+                      { text: personName(person) },
+                      { text: person.role || "—" },
+                    ]),
+                ],
+              },
+              fontSize: 8.5,
+            },
+            {
+              text: `Roles: ${roleSummary(group.people) || "—"}`,
+              fontSize: 8,
+              color: "#3F3F3F",
+              margin: [0, 3, 0, 0],
+            },
           ],
-        },
-        fontSize: 10,
+        })),
+        columnGap: 14,
       } as Doc
     );
   }
@@ -273,7 +303,10 @@ export async function buildPdf(r: Report, photos: PhotoRow[]): Promise<PdfResult
   para("sec-instructions", "Instructions", r.instructions);
 
   // ---- toolbox (omitted if no topic and nobody present)
-  if (r.toolbox && (r.toolbox.topic || r.toolbox.presentIds.length)) {
+  const presentNames = workforcePeople
+    .filter((person) => r.toolbox?.presentIds.includes(person.id))
+    .map(personName);
+  if (r.toolbox && (r.toolbox.topic || presentNames.length)) {
     const tb = r.toolbox;
     content.push(
       H("sec-toolbox", "Toolbox talk"),
@@ -292,13 +325,15 @@ export async function buildPdf(r: Report, photos: PhotoRow[]): Promise<PdfResult
               { text: "Time", bold: true },
               tb.time,
               { text: "Present", bold: true },
-              `${tb.presentIds.length} present`,
+              `${presentNames.length} present`,
             ],
           ],
         },
         fontSize: 10,
       } as Doc
     );
+    if (presentNames.length)
+      content.push({ text: `Present: ${presentNames.join(", ")}`, fontSize: 9.5 });
     if (tb.notes) content.push({ text: tb.notes, fontSize: 10.5 });
   }
 
@@ -444,8 +479,4 @@ async function countPages(blob: Blob): Promise<number> {
     latin += String.fromCharCode(...buf.subarray(i, i + CHUNK));
   }
   return (latin.match(/\/Type\s*\/Page[\s>\]]/g) ?? []).length;
-}
-
-function recordedCrewCount(r: Report) {
-  return r.workforce.a.length + r.workforce.b.length;
 }

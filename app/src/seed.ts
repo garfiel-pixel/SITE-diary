@@ -5,7 +5,7 @@ import { CONFIG, type Unit } from "./config";
 import {
   db,
   type Report,
-  type Crew,
+  type WorkforcePerson,
   type EquipmentRow,
   type MaterialRow,
 } from "./db";
@@ -149,8 +149,37 @@ export function newReport(date: string): Report {
   };
 }
 
-const crew = (items: { name: string; count: number }[][]): Crew[] =>
-  items.flat().map((i, idx) => ({ id: `sc${idx}`, name: i.name, count: i.count }));
+/* Fictional sample people. Names are intentionally ordinary; none are real
+   employees or subcontractors. */
+const samplePerson = (
+  id: string,
+  name: string,
+  role: string
+): WorkforcePerson => ({ id, name, role });
+
+export const SAMPLE_PEOPLE: { a: WorkforcePerson[]; b: WorkforcePerson[] } = {
+  a: [
+    samplePerson("sp1", "Andre Brown", "Supervisor"),
+    samplePerson("sp2", "Kemar Lewis", "Paver operator"),
+    samplePerson("sp3", "Dwayne Clarke", "Paver operator"),
+    samplePerson("sp4", "Ricardo Hall", "Roller driver"),
+    samplePerson("sp5", "Omar Reid", "Roller driver"),
+    samplePerson("sp6", "Jerome Whyte", "Raker"),
+    samplePerson("sp7", "Damion Green", "Raker"),
+    samplePerson("sp8", "Troy Bennett", "Raker"),
+    samplePerson("sp9", "Michael Grant", "Flagman"),
+    samplePerson("sp10", "Kevin Thomas", "Flagman"),
+    samplePerson("sp11", "Patrick Wright", "Flagman"),
+    samplePerson("sp12", "Leroy Sinclair", "Flagman"),
+    samplePerson("sp13", "Andre Smith", "Labourer"),
+    samplePerson("sp14", "Christopher Ellis", "Labourer"),
+    samplePerson("sp15", "Rohan Blake", "Labourer"),
+    samplePerson("sp16", "Tevin Campbell", "Labourer"),
+    samplePerson("sp17", "Jason Brown", "Labourer"),
+    samplePerson("sp18", "Delroy Clarke", "Labourer"),
+  ],
+  b: [samplePerson("sp19", "Devon Hall", "Water bowser driver")],
+};
 
 export async function seedIfNeeded() {
   const count = await db.reports.count();
@@ -182,15 +211,8 @@ export async function seedIfNeeded() {
     materials,
     workforce: {
       groups: ["Own crew", "Subcontractors"],
-      a: [
-        { id: "sa1", name: "Supervisor", count: 1 },
-        { id: "sa2", name: "Paver operator", count: 2 },
-        { id: "sa3", name: "Roller driver", count: 2 },
-        { id: "sa4", name: "Raker", count: 3 },
-        { id: "sa5", name: "Flagman", count: 4 },
-        { id: "sa6", name: "Labourer", count: 6 },
-      ],
-      b: [{ id: "sb1", name: "Water bowser driver", count: 1 }],
+      a: SAMPLE_PEOPLE.a.map((p) => ({ ...p })),
+      b: SAMPLE_PEOPLE.b.map((p) => ({ ...p })),
     },
     wip: "Milling 0+400 to 0+650 completed. Base course laid from 0+650. Asphalt laying commencing at 0+700.\nRolling continues behind the paver.",
     visitors: "09:40 Engineer — Mr. R. Hoyea (NSWMA inspector visited at 13:15)",
@@ -198,9 +220,9 @@ export async function seedIfNeeded() {
       "Keep lane width to the set plan. All staff inside cones at all times.",
     toolbox: {
       topic: "Working near live traffic",
-      presenter: "Site Supervisor",
+      presenter: "Andre Brown",
       time: "07:30",
-      presentIds: crew([[{ name: "Supervisor", count: 1 }], [{ name: "Paver operator", count: 2 }], [{ name: "Roller driver", count: 2 }], [{ name: "Raker", count: 3 }], [{ name: "Flagman", count: 4 }], [{ name: "Labourer", count: 6 }], [{ name: "Mason", count: 1 }, { name: "Steel fixer", count: 1 }]]).slice(0, 8).map((c) => c.id),
+      presentIds: SAMPLE_PEOPLE.a.slice(0, 8).map((p) => p.id),
       notes: "PPE: hi-vis and hard hats confirmed. Traffic: stay behind cones; flagman commands. Heat: rotate water breaks.",
     },
     recordedBy: "K. Johnson",
@@ -210,23 +232,6 @@ export async function seedIfNeeded() {
     updatedAt: Date.now(),
   };
   await db.reports.put(sample);
-
-  // register names for the toolbox talk toggles
-  const names = [
-    "Supervisor",
-    "Paver operator 1",
-    "Paver operator 2",
-    "Roller driver",
-    "Raker 1",
-    "Raker 2",
-    "Raker 3",
-    "Flagman 1",
-    "Labourer 1",
-    "Labourer 2",
-  ];
-  for (const name of names) {
-    await db.register.put({ id: crypto.randomUUID(), name });
-  }
 
   // Sample photos (neutral placeholders generated in code)
   for (const [i, label] of ["SAMPLE A", "SAMPLE B", "SAMPLE C"].entries()) {

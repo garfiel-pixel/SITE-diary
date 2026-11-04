@@ -209,7 +209,7 @@ export interface Report {
   timeLost: { reason: LossKey | null; hours: number };
   equipment: { id: string; name: string; hours: number }[];
   materials: { id: string; name: string; qty: number; unit: Unit }[];
-  workforce: { groups: [string, string]; a: Crew[]; b: Crew[] };
+  workforce: { groups: [string, string]; a: WorkforcePerson[]; b: WorkforcePerson[] };
   wip: string; visitors: string; instructions: string;
   toolbox: { topic: string; presenter: string; time: string; presentIds: string[]; notes: string } | null;
   recordedBy: string; recordedAt: number | null;
@@ -258,7 +258,7 @@ export const db = new DiaryDB();
 This is the heart of the upgrade. Build in this order of impact.
 
 ### 6.1 Start from yesterday
-- On a new day, the top of the page shows one large button: **"Copy from <date of last report>"**. One tap carries forward: project, site, workforce groups and headcounts, equipment names with their usual hours.
+- On a new day, the top of the page shows one large button: **"Copy from <date of last report>"**. One tap carries forward: project, site, the named workforce in both groups, equipment names with their usual hours.
 - It does **not** carry weather, time lost, materials delivered, visitors, instructions, toolbox, photos or recorded-at.
 - `wip` is carried as editable text only if the user taps "Include work in progress" in the same sheet.
 - Works fully offline from Dexie.
@@ -266,7 +266,7 @@ This is the heart of the upgrade. Build in this order of impact.
 
 ### 6.2 Chips that learn
 - Quick-add chips are ranked by `memo.uses` descending, then recency. The top 8 show. "More" opens a sheet with the full catalogue and an "Other" chip.
-- Adding equipment pre-fills its **last-used hours**. Adding material pre-fills its **last qty and unit**. Adding a trade pre-fills its **last headcount**.
+- Adding equipment pre-fills its **last-used hours**. Adding material pre-fills its **last qty and unit**. Adding a person uses the memo-ranked role list; the headcount is derived from the rows.
 - First-run order comes from the paving-and-construction seed catalogue (section 12).
 
 ### 6.3 Selection beats typing
@@ -447,7 +447,7 @@ export function withTransition(update: () => void) {
 - **Topic**: combobox. First time typed, then saved to `memo` (kind `topic`). Dropdown lists saved topics (most used first). No preset list.
 - **Presenter**: same pattern (kind `presenter`).
 - **Time**: auto-fills with the current time on section open. Tappable to adjust.
-- **Present**: register of names. "Add name" once → stored in `register`. Each talk shows the register as large toggle chips (tick = present). Controls: "All present", "None". Live count "7 of 12 present".
+- **Present**: the named workforce from §21. Each talk shows those people as large toggle chips (tick = present). Controls: "All present", "None". Live count "7 of 12 present". Removing a person in Workforce removes them here too.
 - **Notes**: lined text area (7.3) for hazards raised and what was agreed. Chips: PPE, Traffic, Heat, Slips, Plant movement, Dust, Noise.
 - Whole section optional. PDF omits it if no topic and nobody present.
 
@@ -557,7 +557,7 @@ Replace the house-building catalogues. These are starting chips, ranked by use a
 - **Materials**: Asphalt (tonnes), Marl (loads), Gravel (loads), Aggregate (tonnes), Sand (loads), Cement (bags), Tack coat (gal), Kerb (pcs), Pipe (lengths), Rebar (lengths), Ready-mix (m³), Blocks (pcs), Line paint (gal).
 - **Trades**: Supervisor, Paver operator, Roller driver, Raker, Screed hand, Grader operator, Excavator operator, Truck driver, Flagman, Labourer, Mason, Steel fixer, Carpenter, Electrician, Plumber.
 - **Workforce group names** (editable): "Own crew" and "Subcontractors".
-- **Sample report** (clearly badged **SAMPLE**, plus a **Start blank page** button on the first screen): Project "Hatfield Road Rehabilitation", Site "Chainage 0+400 to 0+900", weather Clear A.M. / Showers P.M., time lost Rain 1.5 h, equipment Paver 8, Roller 8, Tipper 6.5, Milling machine 4; materials Asphalt 120 tonnes, Tack coat 40 gal, Marl 2 loads; workforce Supervisor 1, Paver operator 2, Roller driver 2, Raker 3, Flagman 4, Labourer 6 (own crew), Water bowser driver 1 (subcontractors); WIP lines on milling and base course and asphalt laying; one visitor with a time stamp; one instruction; one toolbox talk ("Working near live traffic") with 8 of 10 present; 3 sample photos (generate neutral placeholder images in code, no stock photos, no copyrighted material).
+- **Sample report** (clearly badged **SAMPLE**, plus a **Start blank page** button on the first screen): Project "Hatfield Road Rehabilitation", Site "Chainage 0+400 to 0+900", weather Clear A.M. / Showers P.M., time lost Rain 1.5 h, equipment Paver 8, Roller 8, Tipper 6.5, Milling machine 4; materials Asphalt 120 tonnes, Tack coat 40 gal, Marl 2 loads; workforce 18 fictional named people in Own crew and 1 named subcontractor (see §21; total 19); WIP lines on milling and base course and asphalt laying; one visitor with a time stamp; one instruction; one toolbox talk ("Working near live traffic") with 8 of 19 present; 3 sample photos (generate neutral placeholder images in code, no stock photos, no copyrighted material).
 - Sample project names are invented. State that they are fictional in `NOTES.md`.
 - Sample must be obviously a sample: yellow "SAMPLE DATA" ribbon on the page and a "SAMPLE" line in the PDF header area, removed when the user taps Start blank page.
 
@@ -787,7 +787,7 @@ For each polish improvement:
 | P8 | Access gate | G7 |
 | P9 | Motion, view transitions, a11y pass, performance pass | G8, G9, G12 |
 | P10 | Seed/sample data, `NOTES.md`, final regression of all gates | G13 |
-| P11 | Workforce by name (client clarification, next session) | G14 |
+| P11 | Workforce by name (client clarification) — implemented | G14 |
 
 **G10 (controls)** — unit and Playwright tests: tape moves by drag, by keys, by ± hold; hours step 0.5; no float drift after 100 random steps; numpad entry sets exact value; stepper ±10 clamps at 0.
 **G11 (form)** — at **400×800** and **1280×800**: `document.scrollingElement.scrollWidth <= innerWidth` on every screen; summary strip updates when each input changes; copy-from-yesterday carries only the allowed fields; Recorded by empty blocks PDF with a clear message.
@@ -818,9 +818,9 @@ For each polish improvement:
 
 ---
 
-## 21. Workforce by name — client clarification, next session `[BRIEF]` `[LESS-WORK]`
+## 21. Workforce by name — client clarification (implemented) `[BRIEF]` `[LESS-WORK]`
 
-**Status:** documented 4 Nov 2026; **not implemented** in the current demo build. This supersedes the role-only headcount model in §5, §6.4, §11, §12 and the Workforce row in §8.1. Build it as phase **P11** in the next session.
+**Status:** implemented 4 Nov 2026; G14 passes inside `npm run verify`. This supersedes the role-only headcount model in §5, §6.4, §11, §12 and the Workforce row in §8.1. Sample data uses 19 fictional named people.
 
 **Why.** A diary that records “5 steel fixers” cannot answer *which* steel fixer was on site, or which one did a particular piece of work. Pave-Con identifies people by **name first, role second**. Names make the PDF and the toolbox talk usable as a record, and they are what gets called out on site.
 
@@ -860,7 +860,7 @@ export interface Report {
 ```
 
 - Replace `Crew { name; count }` with `WorkforcePerson`. `a` and `b` become arrays of people.
-- Existing reports must not disappear or crash. Add a Dexie v2 upgrade (or an equivalent one-time normaliser run before render) that expands each legacy `{ name: Role, count: N }` row into **N** person rows with `name: ""` and `role: Role`, in the same group and order. The existing “name this person” inline action lets the user fill those names later.
+- Existing reports must not disappear or crash. Add a Dexie v2 upgrade (or an equivalent one-time normaliser run before render) that expands each legacy `{ name: Role, count: N }` row into **N** person rows with `name: ""` and `role: Role`, in the same group and order. The Edit person action lets the user fill those names later.
 - Do **not** fabricate names during migration. “Unnamed” is honest; a made-up name on a legal record is not.
 - Replace the seeded sample’s role counts with fictional named people and roles, so the demo opens on the new behaviour. Keep the sample clearly badged and keep the total people count consistent with the old sample (19) unless a deliberate change is documented.
 - Removing a person from the roster must also remove that id from `toolbox.presentIds` so the PDF cannot print a present person who is no longer in the crew.
@@ -886,4 +886,4 @@ Playwright, on a fresh activated profile:
 8. Typing audit on the copied-day report stays ≤25 taps and ≤40 typed characters; print the cold-start name-entry count separately.
 9. Add G14 to `npm run verify` and to the final G13 table; a failure blocks “done”.
 
-**Definition of done for P11:** G14 passes, G5/G11 evidence is refreshed, the sample uses named people, and the full `npm run verify` exits 0.
+**Definition of done for P11 (met 4 Nov 2026):** G14 passes, G5/G11 evidence is refreshed, the sample uses named people, and the full `npm run verify` exits 0.

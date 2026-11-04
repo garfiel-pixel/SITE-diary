@@ -12,7 +12,7 @@ import {
   bumpMemo,
   getSetting,
   setSetting,
-  type Crew,
+  type WorkforcePerson,
   type EquipmentRow,
   type MaterialRow,
   type MemoRow,
@@ -30,6 +30,7 @@ import {
   ChipRow,
 } from "../components/core";
 import { ToolboxSection } from "./ToolboxSection";
+import { WorkforceSection } from "./WorkforceSection";
 import { PhotoSection } from "./PhotoSection";
 import { UndoSnackbar, type UndoMsg } from "../components/UndoSnackbar";
 import { SheetWrap } from "../components/SheetWrap";
@@ -360,8 +361,7 @@ export function DiaryScreen({
   const [building, setBuilding] = useState(false);
   const [carryWip, setCarryWip] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
-  const [otherSheet, setOtherSheet] = useState<null | "equipment" | "material" | "trade-a" | "trade-b" | "visitor">(null);
-  const [tradeGroup, setTradeGroup] = useState<"a" | "b">("a");
+  const [otherSheet, setOtherSheet] = useState<null | "equipment" | "material" | "visitor">(null);
   const savedTimer = useRef<number | undefined>(undefined);
 
   /* ---- load for date ---- */
@@ -420,6 +420,7 @@ export function DiaryScreen({
   const projMemo = useLiveQuery(() => db.memo.where("kind").equals("project").toArray(), []);
   const siteMemo = useLiveQuery(() => db.memo.where("kind").equals("site").toArray(), []);
   const recMemo = useLiveQuery(() => db.memo.where("kind").equals("recordedby").toArray(), []);
+  const peopleMemo = useLiveQuery(() => db.memo.where("kind").equals("person").toArray(), []);
 
   const ranked = (memo: MemoRow[] | undefined): string[] =>
     (memo ?? [])
@@ -432,6 +433,7 @@ export function DiaryScreen({
   const eqCatalogue = catalogue(ranked(eqMemo), SEED.equipment.map((e) => e.name));
   const matCatalogue = catalogue(ranked(matMemo), SEED.materials.map((m) => m.name));
   const tradeCatalogue = catalogue(ranked(tradeMemo), SEED.trades.map((t) => t.name));
+  const personSuggestions = ranked(peopleMemo);
 
   /* Live sync state (the mock uploader updates the row directly). */
   const liveSync = useLiveQuery(
@@ -517,12 +519,13 @@ export function DiaryScreen({
 
   /* ---- summary numbers ---- */
   const summary = useMemo(() => {
-    if (!r) return { people: 0, hours: 0, deliveries: 0, lost: 0 };
-    const people =
-      r.workforce.a.reduce((n, c) => n + c.count, 0) +
-      r.workforce.b.reduce((n, c) => n + c.count, 0);
+    if (!r) return { people: 0, named: 0, unnamed: 0, hours: 0, deliveries: 0, lost: 0 };
+    const people = r.workforce.a.length + r.workforce.b.length;
+    const named = [...r.workforce.a, ...r.workforce.b].filter((p) => p.name.trim()).length;
     return {
       people,
+      named,
+      unnamed: people - named,
       hours: r.equipment.reduce((n, e) => n + e.hours, 0),
       deliveries: r.materials.length,
       lost: r.timeLost.reason === "none" ? 0 : r.timeLost.hours,
@@ -556,45 +559,50 @@ export function DiaryScreen({
     void bumpMemo("material", name);
     tick();
   };
-  const addCrewRow = (grp: "a" | "b", name: string) => {
-    const meta = metaOf(tradeMemo, name);
-    const count = meta.count ?? 1;
+  const addPerson = (grp: "a" | "b", name: string, role: string) => {
+    const person: WorkforcePerson = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      role: role.trim(),
+    };
     update((old) => ({
       workforce: {
         ...old.workforce,
-        [grp]: [...old.workforce[grp], { id: crypto.randomUUID(), name, count }],
+        [grp]: [...old.workforce[grp], person],
       },
     }));
-    void bumpMemo("trade", name, { count });
+    void bumpMemo("person", person.name);
+    void bumpMemo("trade", person.role);
+    tick();
+  };
+
+  const editPerson = (grp: "a" | "b", id: string, name: string, role: string) => {
+    update((old) => ({
+      workforce: {
+        ...old.workforce,
+        [grp]: old.workforce[grp].map((p) =>
+          p.id === id ? { ...p, name: name.trim(), role: role.trim() } : p
+        ),
+      },
+    }));
+    void bumpMemo("person", name);
+    void bumpMemo("trade", role);
     tick();
   };
 
   /* Delete is immediate; Undo restores the row at its original position. */
-  const deleteRow = (list: "equipment" | "materials" | "a" | "b", id: string) => {
+  const deleteRow = (list: "equipment" | "materials", id: string) => {
     if (!r) return;
-    const rows =
-      list === "equipment"
-        ? r.equipment
-        : list === "materials"
-          ? r.materials
-          : r.workforce[list];
+    const rows = list === "equipment" ? r.equipment : r.materials;
     const index = rows.findIndex((x) => x.id === id);
     if (index < 0) return;
     const row = rows[index]!;
     const rowName = row.name;
 
-    const remove = (old: Report): Partial<Report> => {
-      if (list === "equipment")
-        return { equipment: old.equipment.filter((x) => x.id !== id) };
-      if (list === "materials")
-        return { materials: old.materials.filter((x) => x.id !== id) };
-      return {
-        workforce: {
-          ...old.workforce,
-          [list]: old.workforce[list].filter((x) => x.id !== id),
-        },
-      };
-    };
+    const remove = (old: Report): Partial<Report> =>
+      list === "equipment"
+        ? { equipment: old.equipment.filter((x) => x.id !== id) }
+        : { materials: old.materials.filter((x) => x.id !== id) };
 
     const restore = (old: Report): Partial<Report> => {
       if (list === "equipment") {
@@ -602,20 +610,63 @@ export function DiaryScreen({
         next.splice(index, 0, row as EquipmentRow);
         return { equipment: next };
       }
-      if (list === "materials") {
-        const next = [...old.materials];
-        next.splice(index, 0, row as MaterialRow);
-        return { materials: next };
-      }
-      const next = [...old.workforce[list]];
-      next.splice(index, 0, row as Crew);
-      return { workforce: { ...old.workforce, [list]: next } };
+      const next = [...old.materials];
+      next.splice(index, 0, row as MaterialRow);
+      return { materials: next };
     };
 
     update(remove);
     setUndo({
       key: Date.now(),
       msg: `${rowName} removed — tap Undo to restore`,
+      fn: () => {
+        update(restore);
+        setUndo(null);
+      },
+    });
+  };
+
+  const deletePerson = (grp: "a" | "b", id: string) => {
+    if (!r) return;
+    const index = r.workforce[grp].findIndex((p) => p.id === id);
+    if (index < 0) return;
+    const person = r.workforce[grp][index]!;
+    const wasPresent = r.toolbox?.presentIds.includes(id) ?? false;
+    const label = person.name.trim() || person.role;
+
+    const remove = (old: Report): Partial<Report> => ({
+      workforce: {
+        ...old.workforce,
+        [grp]: old.workforce[grp].filter((p) => p.id !== id),
+      },
+      toolbox: old.toolbox
+        ? {
+            ...old.toolbox,
+            presentIds: old.toolbox.presentIds.filter((pid) => pid !== id),
+          }
+        : null,
+    });
+
+    const restore = (old: Report): Partial<Report> => {
+      const next = [...old.workforce[grp]];
+      next.splice(index, 0, person);
+      return {
+        workforce: { ...old.workforce, [grp]: next },
+        toolbox: old.toolbox
+          ? {
+              ...old.toolbox,
+              presentIds: wasPresent
+                ? [...new Set([...old.toolbox.presentIds, id])]
+                : old.toolbox.presentIds,
+            }
+          : null,
+      };
+    };
+
+    update(remove);
+    setUndo({
+      key: Date.now(),
+      msg: `${label} removed — tap Undo to restore`,
       fn: () => {
         update(restore);
         setUndo(null);
@@ -684,7 +735,10 @@ export function DiaryScreen({
       if (r.site) await bumpMemo("site", r.site);
       for (const e of r.equipment) await bumpMemo("equipment", e.name, { hours: e.hours });
       for (const m of r.materials) await bumpMemo("material", m.name, { qty: m.qty, unit: m.unit });
-      for (const g of [...r.workforce.a, ...r.workforce.b]) await bumpMemo("trade", g.name, { count: g.count });
+      for (const p of [...r.workforce.a, ...r.workforce.b]) {
+        await bumpMemo("person", p.name);
+        await bumpMemo("trade", p.role);
+      }
 
       /* Stamp the time BEFORE rendering so the first PDF prints it too. */
       const withStamp: Report = {
@@ -1071,102 +1125,31 @@ export function DiaryScreen({
           id="sec-workforce"
           title="Workforce"
           icon="users"
-          summary={`${summary.people} on site`}
+          summary={
+            summary.unnamed > 0
+              ? `${summary.named} named · ${summary.unnamed} unnamed`
+              : `${summary.people} on site`
+          }
           open={open["sec-workforce"]}
           onToggle={() => toggle(open, setOpen, "sec-workforce")}
         >
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            {(["a", "b"] as const).map((g, i) => (
-              <input
-                key={g}
-                type="text"
-                value={r.workforce.groups[i]}
-                onChange={(e) =>
-                  update((old) => {
-                    const groups =
-                      i === 0 ? [e.target.value, old.workforce.groups[1]] : [old.workforce.groups[0], e.target.value];
-                    return { workforce: { ...old.workforce, groups: groups as [string, string] } };
-                  })
-                }
-                aria-label={`Workforce group ${i + 1} name`}
-                className="btn-56 px-3 min-w-36"
-              />
-            ))}
-          </div>
-          <div
-            role="radiogroup"
-            aria-label="Add trades to group"
-            className="flex gap-2 mb-2"
-          >
-            {(["a", "b"] as const).map((g, i) => (
-              <button
-                key={g}
-                type="button"
-                role="radio"
-                aria-checked={tradeGroup === g}
-                className="chip"
-                onClick={() => setTradeGroup(g)}
-              >
-                {tradeGroup === g ? "→ " : ""}
-                {r.workforce.groups[i]}
-              </button>
-            ))}
-          </div>
-          <ChipRow
-            chips={tradeCatalogue.filter(
-              (v) => !r.workforce[tradeGroup].some((c) => c.name === v)
-            )}
-            onPick={(name) => withTransition(() => addCrewRow(tradeGroup, name))}
-            onOther={() => setOtherSheet(tradeGroup === "a" ? "trade-a" : "trade-b")}
+          <WorkforceSection
+            workforce={r.workforce}
+            roleCatalogue={tradeCatalogue}
+            nameSuggestions={personSuggestions}
+            onAddPerson={(grp, name, role) =>
+              withTransition(() => addPerson(grp, name, role))
+            }
+            onEditPerson={(grp, id, name, role) =>
+              withTransition(() => editPerson(grp, id, name, role))
+            }
+            onDeletePerson={(grp, id) =>
+              withTransition(() => deletePerson(grp, id))
+            }
+            onGroups={(groups) =>
+              update((old) => ({ workforce: { ...old.workforce, groups } }))
+            }
           />
-          <div className="mt-3 grid grid-cols-1 gap-2">
-            {(["a", "b"] as const).map((grp) => (
-              <div key={grp}>
-                <span className="font-display text-lg">{r.workforce.groups[grp === "a" ? 0 : 1]}</span>
-                {r.workforce[grp].length === 0 && (
-                  <span className="text-sm" style={{ color: "var(--muted)" }}>
-                    {" "}
-                    — none
-                  </span>
-                )}
-                {r.workforce[grp].map((c) => (
-                  <div key={c.id} className="row-vt flex items-center gap-2 py-1.5">
-                    <Icon name="user" size={20} duo />
-                    <b className="flex-1">{c.name}</b>
-                    <span className="num font-semibold">
-                      <TapeSlider
-                        label={`${c.name} count`}
-                        args={{
-                          min: 0,
-                          max: 99,
-                          step: 1,
-                          value: c.count,
-                          unit: "persons",
-                          onChange: (v) =>
-                            update((old) => ({
-                              workforce: {
-                                ...old.workforce,
-                                [grp]: old.workforce[grp].map((row) =>
-                                  row.id === c.id ? { ...row, count: v } : row
-                                ),
-                              },
-                            })),
-                        }}
-                      />
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${c.name}`}
-                      className="btn-56 !min-h-10 !min-w-10"
-                      onClick={() => withTransition(() => deleteRow(grp, c.id))}
-                    >
-                      <Icon name="trash" size={18} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
         </SectionCard>
 
         {/* 7. Work in progress --------------------------------------------- */}
@@ -1238,7 +1221,9 @@ export function DiaryScreen({
         >
           <ToolboxSection
             toolbox={r.toolbox}
+            people={[...r.workforce.a, ...r.workforce.b]}
             onChange={(toolbox) => update({ toolbox })}
+            onOpenWorkforce={() => scrollTo("sec-workforce")}
           />
         </SectionCard>
 
@@ -1401,17 +1386,13 @@ export function DiaryScreen({
             ? "Other equipment"
             : otherSheet === "material"
               ? "Other material"
-              : otherSheet === "visitor"
-                ? "Other visitor"
-                : "Other trade"
+              : "Other visitor"
         }
         initial=""
         onDone={(v) => {
           if (otherSheet === "equipment") addEquipmentRow(v);
           if (otherSheet === "material") addMaterialRow(v);
           if (otherSheet === "visitor") update((old) => ({ visitors: stampTime(old.visitors, v) }));
-          if (otherSheet === "trade-a") addCrewRow("a", v);
-          if (otherSheet === "trade-b") addCrewRow("b", v);
         }}
       />
 

@@ -262,6 +262,10 @@ const I: Record<string, P[]> = {
     { d: "M4 7h16M9.5 7V4.5h5V7M6 7l1 13h10l1-13z", accent: true, shape: true },
     { d: "M10 11v5M14 11v5" },
   ],
+  pencil: [
+    { d: "M4 20h4L20 8l-4-4L4 16z", accent: true, shape: true },
+    { d: "m14 6 4 4M4 16l4 4" },
+  ],
   undo: [
     { d: "M8.5 4.5 4 9l4.5 4.5", accent: false },
     { d: "M4 9h11a5.5 5.5 0 0 1 0 11h-3" },
