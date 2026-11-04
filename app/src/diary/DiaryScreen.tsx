@@ -653,15 +653,22 @@ export function DiaryScreen({
     setMode("ready");
     setOpen((o) => ({ ...o, "sec-project": true }));
     tick();
+    const copiedId = blank.id;
     setUndo({
       key: Date.now(),
       msg: "Copied from yesterday",
       fn: () => {
-        void db.reports.delete(blank.id);
+        void db.reports.delete(copiedId);
         setUndo(null);
         setR(null);
         setMode("empty");
       },
+    });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = document.getElementById("rec-by");
+        if (el) el.focus();
+      });
     });
   };
 
@@ -690,6 +697,27 @@ export function DiaryScreen({
     setR(blank);
     setMode("ready");
     setOpen((o) => ({ ...o, "sec-project": true }));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = document.getElementById("rec-by");
+        if (el) el.focus();
+      });
+    });
+  };
+
+  const deleteSample = () => {
+    if (!r) return;
+    const deleted = r;
+    void db.reports.delete(deleted.id);
+    setUndo({
+      key: Date.now(),
+      msg: "Sample report deleted",
+      fn: () => {
+        void db.reports.put(deleted);
+        setUndo(null);
+      },
+    });
+    void goHome();
   };
 
   /* ---- summary numbers ---- */
@@ -1173,6 +1201,22 @@ export function DiaryScreen({
           <span className="text-xs" style={{ color: "var(--muted)" }}>
             Fictional sample report. Any new day you start is clean.
           </span>
+          <button
+            type="button"
+            data-testid="delete-sample"
+            style={{
+              minHeight: 48,
+              minWidth: 48,
+              borderRadius: 12,
+              background: "var(--surface)",
+              color: "var(--text)",
+              border: "1px solid var(--rule)",
+            }}
+            className="chip font-display text-base"
+            onClick={deleteSample}
+          >
+            Delete sample report
+          </button>
         </div>
       )}
 
