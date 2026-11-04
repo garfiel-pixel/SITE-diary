@@ -5,6 +5,20 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  build: {
+    rolldownOptions: {
+      output: {
+        /* Keep the lazy PDF chunks at stable URLs. A page opened before a
+           deploy then finds the builder instead of a deleted hash-named
+           file (“Failed to fetch dynamically imported module”). */
+        chunkFileNames: (chunk) => {
+          if (chunk.name === "build") return "assets/pdf-builder.js";
+          if (chunk.name === "pdfmake") return "assets/pdfmake.js";
+          return "assets/[name]-[hash].js";
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),

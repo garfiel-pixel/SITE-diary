@@ -411,10 +411,14 @@ export async function buildPdf(r: Report, photos: PhotoRow[]): Promise<PdfResult
     images: { logo: logoDataUrl, ...photoImages },
     header: () => ({
       margin: [36, 18, 36, 0],
+      /* 16 pt breathing room after the 92 pt logo: title/site text can never
+         touch the Pave-Con mark, even when the project name wraps. */
+      columnGap: 16,
       columns: [
         { image: "logo", width: 92 },
         {
           width: "*",
+          verticalAlignment: "middle",
           stack: [
             {
               text: CONFIG.motto,

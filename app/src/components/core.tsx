@@ -27,7 +27,7 @@ interface TapeArgs {
   unit: string;
   onChange: (v: number) => void;
   /** Pointer drag previews locally; the report commits on release. */
-  onPreview?: (v: number) => void;
+  onPreview?: (v: number, trackWidth?: number) => void;
   onPreviewEnd?: (v: number) => void;
 }
 
@@ -45,8 +45,8 @@ export function TapeSlider({ args, label }: { args: TapeArgs; label: string }) {
 
   /* Drag preview writes straight to the DOM. React only updates on release, so
      a 60 fps drag does not reconcile the form on every pointer move. */
-  const paintPreview = (v: number) => {
-    const trackWidth = track.current?.clientWidth ?? 0;
+  const paintPreview = (v: number, measuredWidth?: number) => {
+    const trackWidth = measuredWidth ?? track.current?.clientWidth ?? 0;
     if (thumbRef.current) {
       const x = (trackWidth * (v - min)) / (max - min);
       thumbRef.current.style.transform = `translateX(${x}px)`;
@@ -54,7 +54,6 @@ export function TapeSlider({ args, label }: { args: TapeArgs; label: string }) {
     /* Visible label follows the finger; ARIA stays on the committed value
        (a screen reader only needs the value after release). */
     if (numRef.current) numRef.current.textContent = fmtVal(v);
-    if (buttonValueRef.current) buttonValueRef.current.textContent = fmtVal(v);
   };
 
   const { track, bind, commit } = useTape({
@@ -182,10 +181,13 @@ export function useTape({
   const track = useRef<HTMLDivElement | null>(null);
   const dragging = useRef(false);
   const lastPointerValue = useRef<number | null>(null);
+  /* The track does not move during a drag, so measure it once on press.
+     Re-reading the rect per pointermove forces layout after each preview. */
+  const dragRect = useRef<{ left: number; width: number } | null>(null);
 
   const fromX = useCallback(
     (x: number) => {
-      const r = track.current?.getBoundingClientRect();
+      const r = dragRect.current ?? track.current?.getBoundingClientRect();
       if (!r) return value;
       const t = Math.min(1, Math.max(0, (x - r.left) / r.width));
       const v = Math.round((min + t * (max - min)) / step) * step;
@@ -209,20 +211,23 @@ export function useTape({
     onPointerDown: (e: React.PointerEvent) => {
       dragging.current = true;
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const r = track.current?.getBoundingClientRect();
+      dragRect.current = r ? { left: r.left, width: r.width } : null;
       const v = fromX(e.clientX);
       lastPointerValue.current = v;
-      if (onPreview) onPreview(v);
+      if (onPreview) onPreview(v, r?.width);
       else commit(v);
     },
     onPointerMove: (e: React.PointerEvent) => {
       if (!dragging.current) return;
       const v = fromX(e.clientX);
       lastPointerValue.current = v;
-      if (onPreview) onPreview(v);
+      if (onPreview) onPreview(v, dragRect.current?.width);
       else commit(v);
     },
     onPointerUp: () => {
       dragging.current = false;
+      dragRect.current = null;
       const v = lastPointerValue.current;
       lastPointerValue.current = null;
       if (v != null) {
@@ -232,6 +237,7 @@ export function useTape({
     },
     onPointerCancel: () => {
       dragging.current = false;
+      dragRect.current = null;
       lastPointerValue.current = null;
     },
     onKeyDown: (e: React.KeyboardEvent) => {
@@ -289,6 +295,7 @@ export function HoldButton({
     run();
   };
   const start = () => {
+    tick();
     stepRef.current();
     t1.current = window.setTimeout(accelerateAndRepeat, 600);
   };
@@ -305,6 +312,7 @@ export function HoldButton({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
+          tick();
           onStep();
         }
       }}
@@ -604,15 +612,19 @@ export function SectionCard({
   onToggle,
   children,
   tone,
+  done,
+  progress,
 }: {
   id: string;
   title: string;
-  summary?: string;
+  summary?: ReactNode;
   icon?: string;
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
   tone?: "alert";
+  done?: boolean;
+  progress?: number;
 }) {
   /* Content mounts on first open and stays mounted after that. Closed
      sections therefore add no DOM/render cost while a tape drag updates
@@ -633,22 +645,38 @@ export function SectionCard({
           onClick={onToggle}
           aria-expanded={open}
           aria-controls={`${id}-body`}
-          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+          className="section-toggle w-full flex items-center gap-3 px-4 py-3 text-left"
         >
-          {icon && <Icon name={icon} size={26} duo />}
-          <span className="font-display text-2xl flex-1">{title}</span>
-          {summary && (
-            <span className="text-sm num" style={{ color: "var(--muted)" }}>
-              {summary}
+          {icon && (
+            <span className="section-icon">
+              <Icon name={icon} size={26} duo />
+              {done && (
+                <span className="section-done" aria-hidden>
+                  <Icon name="check" size={12} />
+                </span>
+              )}
             </span>
+          )}
+          <span className="section-heading font-display text-2xl">{title}</span>
+          {summary !== undefined && (
+            <span className="section-summary text-sm num">{summary}</span>
           )}
           <span
             aria-hidden
-            className="transition-transform"
-            style={{ transform: open ? "rotate(90deg)" : "none" }}
+            className="section-chevron"
+            style={{ transform: open ? "rotate(180deg)" : "none" }}
           >
-            ›
+            <Icon name="chevron" size={22} />
           </span>
+          {progress !== undefined && (
+            <span className="section-progress" aria-hidden>
+              <span
+                style={{
+                  width: `${Math.max(0, Math.min(1, progress)) * 100}%`,
+                }}
+              />
+            </span>
+          )}
         </button>
       </h2>
       <div className="card-collapse" data-open={open} id={`${id}-body`}>

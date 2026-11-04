@@ -324,6 +324,7 @@ const I: Record<string, P[]> = {
     { d: "M12 3.5 2.5 20.5h19z", accent: true, shape: true },
     { d: "M12 10v4.5M12 17.5h.01" },
   ],
+  chevron: [{ d: "M5 8l7 7 7-7" }],
 };
 const weatherIconNames = ["clear", "partly", "overcast", "showers", "heavy", "storm"] as const;
 export type IconName = string;

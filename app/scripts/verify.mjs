@@ -161,6 +161,17 @@ record(
   audit ? (audit.ok ? "typing audit passed (see test log)" : "typing audit failed") : "typing audit did not run",
   rel(jsonPath)
 );
+const fullForm = specs.find((s) => s.title.startsWith("Full form"));
+record(
+  "Export",
+  !!fullForm?.ok,
+  fullForm
+    ? fullForm.ok
+      ? "every section filled through the UI, PDF exported, header clear of logo"
+      : "full-form export failed"
+    : "full-form export did not run",
+  rel(path.join(ART, "full-form-site-diary.pdf"))
+);
 
 // ---------------------------------------------------------- G2 ---------
 console.log("\n== Artifacts / G2 ==");
@@ -203,7 +214,7 @@ record(
 );
 
 // ---------------------------------------------------------- G13 --------
-const gateOrder = ["G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "G14"];
+const gateOrder = ["G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "G14", "G15", "G16", "G17", "Export"];
 const prior = new Map(results.map((r) => [r.gate, r]));
 const allOk =
   gateOrder.every((g) => prior.get(g)?.ok) &&

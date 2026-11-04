@@ -110,7 +110,10 @@ function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }
           type="button"
           className="btn-56 text-2xl"
           aria-label="Previous day"
-          onClick={() => withTransition(() => onDate(shiftDate(date, -1)))}
+          onClick={() => {
+            tick();
+            withTransition(() => onDate(shiftDate(date, -1)));
+          }}
         >
           ‹
         </button>
@@ -126,7 +129,10 @@ function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }
           type="button"
           className="btn-56 text-2xl"
           aria-label="Next day"
-          onClick={() => withTransition(() => onDate(shiftDate(date, 1)))}
+          onClick={() => {
+            tick();
+            withTransition(() => onDate(shiftDate(date, 1)));
+          }}
         >
           ›
         </button>
@@ -134,7 +140,10 @@ function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }
       <button
         type="button"
         className="chip self-start"
-        onClick={() => onDate(todayISO())}
+        onClick={() => {
+          tick();
+          onDate(todayISO());
+        }}
       >
         Today
       </button>
@@ -176,29 +185,35 @@ function WeatherStatus({ w }: { w: WeatherKey | null }) {
 
 function Tile({
   children,
+  id,
   selected,
   onPick,
   label,
-  pulse,
+  tabIndex,
+  onKeyDown,
 }: {
   children: React.ReactNode;
+  id: string;
   selected: boolean;
   onPick: () => void;
   label: string;
-  pulse?: boolean;
+  tabIndex: number;
+  onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <button
       type="button"
+      id={id}
       role="radio"
       aria-checked={selected}
       aria-label={label}
+      tabIndex={tabIndex}
+      onKeyDown={onKeyDown}
       onClick={() => {
         tick();
         onPick();
       }}
-      className={`chip flex-col !min-h-16 flex-1 min-w-0 ${pulse ? "pulse-soft" : ""}`}
-      style={selected ? undefined : { flexBasis: 0 }}
+      className="chip wx-tile min-w-0"
     >
       {children}
     </button>
@@ -216,21 +231,87 @@ function WeatherPicker({
   onChange: (w: WeatherKey) => void;
   pulse?: boolean;
 }) {
+  const slug = label.replace(/[^a-z]/gi, "").toLowerCase();
+  const checked = WEATHER_LABELS.findIndex((x) => x.key === value);
+  const tabStop = checked >= 0 ? checked : 0;
+  const [focusKey, setFocusKey] = useState<WeatherKey | null>(null);
+  useEffect(() => {
+    if (!focusKey) return;
+    document.getElementById(`wx-${slug}-${focusKey}`)?.focus();
+    setFocusKey(null);
+  }, [focusKey, slug]);
+  const move = (index: number, delta: number) => {
+    const next = (index + delta + WEATHER_LABELS.length) % WEATHER_LABELS.length;
+    onChange(WEATHER_LABELS[next].key);
+    setFocusKey(WEATHER_LABELS[next].key);
+  };
   return (
-    <div role="radiogroup" aria-label={`Weather ${label}`} className="flex gap-2">
-      {WEATHER_LABELS.map((item) => (
-        <Tile
-          key={item.key}
-          label={`${label} ${item.label}${pulse ? " — suggested time" : ""}`}
-          selected={value === item.key}
-          onPick={() => onChange(item.key)}
-          pulse={pulse && item.key === "showers"}
-        >
-          <Icon name={item.icon} size={28} duo />
-          <span className="text-[11px] leading-tight mt-1">{item.label}</span>
-        </Tile>
-      ))}
+    <div role="radiogroup" aria-label={`Weather ${label}`} className="wx-picker">
+      <div
+        className={`wx-rail ${pulse ? "pulse-soft" : ""}`}
+        data-filled={!!value}
+        aria-hidden="true"
+        data-testid={`weather-rail-${slug}`}
+      >
+        <span className="wx-rail-pulse" aria-hidden="true" />
+        <Icon name={label === "A.M." ? "sun" : "moon"} size={18} />
+        <span className="wx-rail-label">{label === "A.M." ? "AM" : "PM"}</span>
+        <span className="wx-rail-check">
+          <Icon name="check" size={12} />
+        </span>
+      </div>
+      <div className="wx-grid">
+        {WEATHER_LABELS.map((item, index) => (
+          <Tile
+            key={item.key}
+            id={`wx-${slug}-${item.key}`}
+            label={`${label} ${item.label}`}
+            selected={value === item.key}
+            tabIndex={index === tabStop ? 0 : -1}
+            onPick={() => onChange(item.key)}
+            onKeyDown={(e) => {
+              const delta =
+                e.key === "ArrowRight" || e.key === "ArrowDown"
+                  ? 1
+                  : e.key === "ArrowLeft" || e.key === "ArrowUp"
+                    ? -1
+                    : 0;
+              if (!delta) return;
+              e.preventDefault();
+              move(index, delta);
+            }}
+          >
+            <Icon name={item.icon} size={28} duo />
+            <span className="wx-tile-label">{item.label}</span>
+          </Tile>
+        ))}
+      </div>
     </div>
+  );
+}
+
+function WeatherSummary({ weather }: { weather: { am: WeatherKey | null; pm: WeatherKey | null } }) {
+  const part = (tag: string, value: WeatherKey | null) => {
+    const item = WEATHER_LABELS.find((x) => x.key === value);
+    return (
+      <span className={`wx-summary-part ${item ? "" : "wx-summary-empty"}`}>
+        <span className="wx-summary-tag">{tag}</span>
+        {item ? (
+          <>
+            <Icon name={item.icon} size={16} />
+            <span className="wx-summary-label">{item.label}</span>
+          </>
+        ) : (
+          <span className="wx-summary-empty">—</span>
+        )}
+      </span>
+    );
+  };
+  return (
+    <span className="wx-summary" data-testid="weather-summary">
+      {part("AM", weather.am)}
+      {part("PM", weather.pm)}
+    </span>
   );
 }
 
@@ -706,6 +787,21 @@ export function DiaryScreen({
     wip: !!r?.wip.trim(),
     recorded: !!r?.recordedBy.trim(),
   };
+  const sectionProgress = {
+    project: (r?.project.trim() ? 0.5 : 0) + (r?.site.trim() ? 0.5 : 0),
+    weather: (Number(!!r?.weather.am) + Number(!!r?.weather.pm)) / 2,
+    lost: r?.timeLost.reason ? 1 : 0,
+    equipment: r?.equipment.length ? 1 : 0,
+    materials: r?.materials.length ? 1 : 0,
+    workforce: complete.workforce ? 1 : 0,
+    wip: complete.wip ? 1 : 0,
+    visitors: r?.visitors.trim() ? 1 : 0,
+    instructions: r?.instructions.trim() ? 1 : 0,
+    toolbox: r?.toolbox?.topic ? 1 : 0,
+    photos: photosCount > 0 ? 1 : 0,
+    recorded: complete.recorded ? 1 : 0,
+  };
+  const isDone = (key: keyof typeof sectionProgress) => sectionProgress[key] === 1;
   const scrollTo = (id: string) => {
     setOpen((o) => ({ ...o, [id]: true }));
     requestAnimationFrame(() => {
@@ -957,6 +1053,8 @@ export function DiaryScreen({
           title="Project / Date"
           icon="calendar"
           summary={compact([r.project, r.site])}
+          done={isDone("project")}
+          progress={sectionProgress.project}
           open={open["sec-project"]}
           onToggle={() => toggle(open, setOpen, "sec-project")}
         >
@@ -987,7 +1085,9 @@ export function DiaryScreen({
           id="sec-weather"
           title="Weather"
           icon="partly"
-          summary={compact([r.weather.am && `A.M. ${wLabel(r.weather.am)}`, r.weather.pm && `P.M. ${wLabel(r.weather.pm)}`])}
+          summary={<WeatherSummary weather={r.weather} />}
+          done={isDone("weather")}
+          progress={sectionProgress.weather}
           open={open["sec-weather"]}
           onToggle={() => toggle(open, setOpen, "sec-weather")}
         >
@@ -1015,6 +1115,8 @@ export function DiaryScreen({
               ? `${lossLabel(r.timeLost.reason)} · ${r.timeLost.reason === "none" ? "0 h" : fmtHours(r.timeLost.hours)}`
               : "—"
           }
+          done={isDone("lost")}
+          progress={sectionProgress.lost}
           open={open["sec-lost"]}
           onToggle={() => toggle(open, setOpen, "sec-lost")}
         >
@@ -1048,6 +1150,8 @@ export function DiaryScreen({
           title="Equipment on site"
           icon="roller"
           summary={r.equipment.length ? `${r.equipment.length} machines · ${fmtHours(r.equipment.reduce((n, e) => n + e.hours, 0))}` : "—"}
+          done={isDone("equipment")}
+          progress={sectionProgress.equipment}
           open={open["sec-equipment"]}
           onToggle={() => toggle(open, setOpen, "sec-equipment")}
         >
@@ -1074,6 +1178,8 @@ export function DiaryScreen({
           title="Materials delivered"
           icon="matAsphalt"
           summary={r.materials.length ? `${r.materials.length} deliveries` : "—"}
+          done={isDone("materials")}
+          progress={sectionProgress.materials}
           open={open["sec-materials"]}
           onToggle={() => toggle(open, setOpen, "sec-materials")}
         >
@@ -1130,6 +1236,8 @@ export function DiaryScreen({
               ? `${summary.named} named · ${summary.unnamed} unnamed`
               : `${summary.people} on site`
           }
+          done={isDone("workforce")}
+          progress={sectionProgress.workforce}
           open={open["sec-workforce"]}
           onToggle={() => toggle(open, setOpen, "sec-workforce")}
         >
@@ -1158,6 +1266,8 @@ export function DiaryScreen({
           title="Work in progress"
           icon="grader"
           summary={r.wip.trim() ? firstLine(r.wip) : "—"}
+          done={isDone("wip")}
+          progress={sectionProgress.wip}
           open={open["sec-wip"]}
           onToggle={() => toggle(open, setOpen, "sec-wip")}
         >
@@ -1179,6 +1289,8 @@ export function DiaryScreen({
           title="Visitors"
           icon="user"
           summary={r.visitors.trim() ? firstLine(r.visitors) : "—"}
+          done={isDone("visitors")}
+          progress={sectionProgress.visitors}
           open={open["sec-visitors"]}
           onToggle={() => toggle(open, setOpen, "sec-visitors")}
         >
@@ -1198,6 +1310,8 @@ export function DiaryScreen({
           title="Instructions"
           icon="warning"
           summary={r.instructions.trim() ? firstLine(r.instructions) : "—"}
+          done={isDone("instructions")}
+          progress={sectionProgress.instructions}
           open={open["sec-instructions"]}
           onToggle={() => toggle(open, setOpen, "sec-instructions")}
         >
@@ -1216,6 +1330,8 @@ export function DiaryScreen({
           title="Toolbox talk"
           icon="users"
           summary={r.toolbox?.topic ? r.toolbox.topic : "—"}
+          done={isDone("toolbox")}
+          progress={sectionProgress.toolbox}
           open={open["sec-toolbox"]}
           onToggle={() => toggle(open, setOpen, "sec-toolbox")}
         >
@@ -1233,6 +1349,8 @@ export function DiaryScreen({
           title="Photos"
           icon="camera"
           summary={photosCount > 0 ? `${photosCount} photos` : "—"}
+          done={isDone("photos")}
+          progress={sectionProgress.photos}
           open={open["sec-photos"]}
           onToggle={() => toggle(open, setOpen, "sec-photos")}
         >
@@ -1245,6 +1363,8 @@ export function DiaryScreen({
           title="Recorded by"
           icon="user"
           summary={r.recordedBy ? r.recordedBy : "required"}
+          done={isDone("recorded")}
+          progress={sectionProgress.recorded}
           open={open["sec-recorded"]}
           onToggle={() => toggle(open, setOpen, "sec-recorded")}
           tone={recordedError ? "alert" : undefined}
@@ -1498,7 +1618,10 @@ function StatusChip({
   return (
     <button
       type="button"
-      onClick={onJump}
+      onClick={() => {
+        tick();
+        onJump();
+      }}
       data-active={active ? "true" : "false"}
       aria-label={`${label}: ${done ? "complete" : "not yet"} — jump to section`}
       className="chip !min-h-10 shrink-0"
@@ -1531,18 +1654,40 @@ function ReasonPicker({
   value: LossKey | null;
   onPick: (k: LossKey) => void;
 }) {
+  const checked = LOSS_LABELS.findIndex((x) => x.key === value);
+  const tabStop = checked >= 0 ? checked : 0;
+  const move = (index: number, delta: number) => {
+    const next = (index + delta + LOSS_LABELS.length) % LOSS_LABELS.length;
+    onPick(LOSS_LABELS[next].key);
+    requestAnimationFrame(() => {
+      document.getElementById(`loss-${LOSS_LABELS[next].key}`)?.focus();
+    });
+  };
   return (
     <div role="radiogroup" aria-label="Reason for time lost" className="flex gap-2 flex-wrap">
-      {LOSS_LABELS.map((item) => (
+      {LOSS_LABELS.map((item, index) => (
         <button
           key={item.key}
+          id={`loss-${item.key}`}
           type="button"
           role="radio"
           aria-checked={value === item.key}
-          className={`chip ${value === item.key ? "" : "!bg-transparent"}`}
+          tabIndex={index === tabStop ? 0 : -1}
+          className="chip"
           onClick={() => {
             tick();
             onPick(item.key);
+          }}
+          onKeyDown={(e) => {
+            const delta =
+              e.key === "ArrowRight" || e.key === "ArrowDown"
+                ? 1
+                : e.key === "ArrowLeft" || e.key === "ArrowUp"
+                  ? -1
+                  : 0;
+            if (!delta) return;
+            e.preventDefault();
+            move(index, delta);
           }}
         >
           <Icon name={item.icon} size={20} duo />

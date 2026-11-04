@@ -20,6 +20,10 @@ async function vtCount(page: Page) {
   return page.evaluate(() => (window as unknown as { __vt: number }).__vt);
 }
 
+// Tracing records a snapshot for every pointer move and would itself show up
+// as main-thread work in the 4x-throttled drag measurement.
+test.use({ trace: "off" });
+
 test.describe("G12 — motion", () => {
   test("reduced motion disables animation/VT; normal motion runs; drag has no long tasks", async ({
     page,

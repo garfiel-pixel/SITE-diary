@@ -170,6 +170,7 @@ export function PhotoSection({ reportId }: { reportId: string }) {
           className="chip"
           aria-pressed={selectMode}
           onClick={() => {
+            tick();
             setSelectMode((s) => !s);
             setSelected(new Set());
           }}
@@ -182,7 +183,10 @@ export function PhotoSection({ reportId }: { reportId: string }) {
             className="chip"
             disabled={!selectedCount}
             style={{ opacity: selectedCount ? 1 : 0.5 }}
-            onClick={() => setBundleSheet(true)}
+            onClick={() => {
+              tick();
+              setBundleSheet(true);
+            }}
           >
             Describe selected ({selectedCount})
           </button>
@@ -197,6 +201,7 @@ export function PhotoSection({ reportId }: { reportId: string }) {
             selectMode={selectMode}
             selected={selected.has(p.id)}
             onToggleSelect={() => {
+              tick();
               setSelected((s) => {
                 const n = new Set(s);
                 if (n.has(p.id)) n.delete(p.id);

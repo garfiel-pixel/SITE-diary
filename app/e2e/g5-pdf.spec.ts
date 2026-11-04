@@ -14,22 +14,58 @@ import { fmtDate } from "../src/lib/format";
 const ARTIFACTS = path.resolve(process.cwd(), "..", "artifacts");
 const FIXTURES = path.join(ARTIFACTS, "fixtures");
 
+interface PdfLine {
+  str: string;
+  x: number;
+  y: number;
+  width: number;
+}
+
 async function pdfPages(file: string) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const data = new Uint8Array(fs.readFileSync(file));
   const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
   const pages: string[] = [];
+  const lines: PdfLine[][] = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
-    pages.push(
-      content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ")
-        .replace(/\s+/g, " ")
-    );
+    const pageLines: PdfLine[] = [];
+    const text: string[] = [];
+    for (const item of content.items) {
+      if (!("str" in item)) continue;
+      text.push(item.str);
+      if (!item.str.trim()) continue;
+      pageLines.push({
+        str: item.str,
+        x: item.transform[4],
+        y: item.transform[5],
+        width: item.width,
+      });
+    }
+    pages.push(text.join(" ").replace(/\s+/g, " "));
+    lines.push(pageLines);
   }
-  return { pages, numPages: doc.numPages };
+  return { pages, lines, numPages: doc.numPages };
+}
+
+/* The header logo is 92 pt wide with a 36 pt left margin; its right edge is
+   128 pt. The title column must start at least 16 pt to the right of it. */
+function assertHeaderClearOfLogo(lines: PdfLine[][]) {
+  lines.forEach((pageLines, i) => {
+    const header = pageLines.filter((line) => line.y > 780);
+    expect(header.length, `page ${i + 1} has no header text`).toBeGreaterThanOrEqual(2);
+    for (const line of header) {
+      expect(line.x, `page ${i + 1} header “${line.str}” clear of logo`).toBeGreaterThanOrEqual(
+        144
+      );
+      expect(
+        line.x + line.width,
+        `page ${i + 1} header “${line.str}” inside right margin`
+      ).toBeLessThanOrEqual(559.5);
+    }
+    expect(header.map((line) => line.str).join(" ")).toContain("CHOOSE WISELY");
+  });
 }
 
 function assertEveryPage(
@@ -84,6 +120,9 @@ test.describe("G5 — PDF", () => {
 
     const sample = await pdfPages(samplePath);
     const sampleBytes = fs.statSync(samplePath).size;
+    expect(fs.existsSync(path.join(process.cwd(), "dist", "assets", "pdf-builder.js"))).toBe(
+      true
+    );
     console.log(`G5 sample PDF: ${sample.numPages} page(s), ${sampleBytes} bytes`);
     expect(sample.numPages).toBeGreaterThanOrEqual(1);
     expect(sample.pages[0]).toContain("m³");
@@ -93,7 +132,10 @@ test.describe("G5 — PDF", () => {
       site: "Chainage 0+400 to 0+900",
       date: fmtDate(TODAY_ISO),
     });
-    console.log("G5 sample: recorded-by footer, page counter and header on every page");
+    assertHeaderClearOfLogo(sample.lines);
+    console.log(
+      "G5 sample: header text starts 16pt after the logo; footer/counter on every page"
+    );
 
     // ---- 30-photo stress report ---------------------------------------
     await page.locator('.k-sheet[data-open="true"]').click({ position: { x: 4, y: 4 } });
@@ -128,7 +170,8 @@ test.describe("G5 — PDF", () => {
       site: "Chainage 0+400 to 0+900",
       date: fmtDate(TODAY_ISO),
     });
-    console.log("G5 stress: header, recorded-by footer and page counter on every page");
+    assertHeaderClearOfLogo(stress.lines);
+    console.log("G5 stress: header clear of logo; footer and page counter on every page");
 
     fs.writeFileSync(
       path.join(ARTIFACTS, "pdf-gate.txt"),
