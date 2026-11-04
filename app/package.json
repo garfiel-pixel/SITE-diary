@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "worker:dev": "npm run build && wrangler dev",
+    "deploy:worker": "npm run build && wrangler deploy",
     "make-icons": "node scripts/make-icons.mjs",
     "make-fonts": "node scripts/make-fonts.mjs",
     "make-fixtures": "node scripts/make-fixtures.mjs",
@@ -40,6 +42,7 @@
     "typescript": "5.9.3",
     "vite": "8.3.5",
     "vite-plugin-pwa": "2.0.0",
-    "workbox-window": "7.4.1"
+    "workbox-window": "7.4.1",
+    "wrangler": "4.157.0"
   }
 }

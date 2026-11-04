@@ -24,6 +24,25 @@ npm run build        # tsc --noEmit && vite build
 npm run preview      # http://localhost:4173
 ```
 
+## Cloudflare Workers
+
+The app deploys as a static-assets Worker; it does not need a server-side API.
+`wrangler.jsonc` publishes `dist/` and falls back to `index.html` for app routes.
+
+For a local Workers preview or direct deployment, from `app/` run:
+
+```bash
+npm ci
+npm run worker:dev
+npm run deploy:worker
+```
+
+Authenticate Wrangler first with `npx wrangler login`. To connect the repository
+in Cloudflare Workers Builds, set the root directory to `app`, the build command
+to `npm run build`, and the deploy command to `npx wrangler deploy`. Use Node.js 22
+for the build environment. The project name is `pavecon-site-diary`; configure a
+custom domain in the Cloudflare dashboard after the first successful deployment.
+
 Demo activation code: **`PAVECON-DEMO`**. It is only printed on the gate in dev or
 when the URL has `?demo`; the production build never shows it by default.
 
