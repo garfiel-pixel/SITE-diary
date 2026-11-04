@@ -136,11 +136,7 @@ function StickyBack({ onBack }: { onBack: () => void }) {
   );
 }
 
-  const leave = useCallback(async () => {
-    await flushNow();
-  }, []);
-
-  function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }) {
+function DateNav({ date, onDate }: { date: string; onDate: (d: string) => void }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -152,7 +148,7 @@ function StickyBack({ onBack }: { onBack: () => void }) {
             tick();
             withTransition(() => {
               onDate(shiftDate(date, -1));
-              void leave();
+              void flushNow();
             });
           }}
         >
@@ -174,7 +170,7 @@ function StickyBack({ onBack }: { onBack: () => void }) {
             tick();
             withTransition(() => {
               onDate(shiftDate(date, 1));
-              void leave();
+              void flushNow();
             });
           }}
         >
@@ -187,7 +183,7 @@ function StickyBack({ onBack }: { onBack: () => void }) {
         onClick={() => {
           tick();
           onDate(todayISO());
-          void leave();
+          void flushNow();
         }}
       >
         Today
@@ -484,6 +480,7 @@ export function DiaryScreen({
   const [pdfSheet, setPdfSheet] = useState<{ name: string; bytes: number; pages: number } | null>(null);
   const [recordedError, setRecordedError] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   const [carryWip, setCarryWip] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -533,17 +530,35 @@ export function DiaryScreen({
         await setSetting("persistAsked", true);
       }
       setSavedAt(`Saved on phone · ${fmtTime(Date.now())}`);
+      setSaveError(null);
     }, 400);
   }, []);
+
+  useEffect(() => {
+    if (!saveError) return;
+    const storageKey = "site-diary-persist-failure";
+    try {
+      localStorage.setItem(storageKey, String(Date.now()));
+    } catch {
+      /* ignore when persistent storage is unavailable */
+    }
+  }, [saveError]);
 
   const leave = useCallback(async () => {
     await flushNow();
   }, []);
 
-  const reload = useCallback(async () => {
-    await leave();
-    window.location.reload();
-  }, [leave]);
+  const saveNow = useCallback(async () => {
+    if (!r) return;
+    try {
+      await db.reports.put({ ...r, updatedAt: Date.now() });
+      setSaveError(null);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "storage problem";
+      setSaveError(message);
+    }
+  }, [r]);
 
   const update = useCallback(
     (patch: ((r0: Report) => Partial<Report>) | Partial<Report>) => {
@@ -1037,7 +1052,7 @@ export function DiaryScreen({
                 }}
                 onClick={() => {
                   copyFromPrev();
-                  void leave();
+                  void flushNow();
                 }}
               >
                 Copy from {fmtDay(prev.date)} ({fmtFull(prev.date).split(", ")[1]}) →
@@ -1061,7 +1076,7 @@ export function DiaryScreen({
           ) : null}
           <button type="button" data-testid="start-blank" className="chip" onClick={() => {
             startBlank();
-            void leave();
+            void flushNow();
           }}>
             Start a blank report
           </button>
@@ -1074,6 +1089,32 @@ export function DiaryScreen({
 
   return (
     <div className="max-w-3xl mx-auto">
+      {saveError && (
+        <div
+          role="alert"
+          data-testid="persist-failure"
+          className="fixed left-3 right-3 z-50 p-3 rounded-xl shadow-lg flex items-center gap-3"
+          style={{
+            top: "var(--header-h, 96px)",
+            background: "var(--band)",
+            color: "var(--on-band)",
+          }}
+        >
+          <Icon name="warning" size={20} />
+          <span className="text-sm font-semibold flex-1">
+            Could not save on phone: {saveError}
+          </span>
+          <button
+            type="button"
+            className="font-display text-lg"
+            style={{ color: "var(--accent)" }}
+            onClick={() => setSaveError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* sticky summary strip, directly under the live header height */}
       <div
         className="summary-strip sticky z-30"
