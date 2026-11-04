@@ -3,14 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CONFIG } from "./config";
-import { getSetting, setSetting, todayISO } from "./db";
+import { getSetting, setSetting } from "./db";
 import { bootRecovery } from "./db";
 import { seedIfNeeded } from "./seed";
 import { startSync } from "./sync";
 import { ActivationGate } from "./components/ActivationGate";
 import { DiaryScreen } from "./diary/DiaryScreen";
+import { Home } from "./Home";
 import { SheetWrap } from "./components/SheetWrap";
 import { Icon, ALL_ICONS } from "./icons";
+import { useRoute, replaceReport, goHome } from "./lib/route";
 
 /* ---- logo img: supplied JPG, unmodified, from /public (preloaded) ---- */
 const logoUrl = "/brand/logo.jpg";
@@ -88,10 +90,11 @@ function MainShell({
   updateReady: boolean;
   clearUpdate: () => void;
 }) {
-  const [date, setDate] = useState(todayISO());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateMsg, setUpdateMsg] = useState(!!updateReady);
   const headerRef = useRef<HTMLElement | null>(null);
+  const screenTitleRef = useRef<HTMLElement | null>(null);
+  const route = useRoute();
 
   /* Publish the live header height so the sticky summary strip can sit
      directly beneath it (safe areas and logo size included). */
@@ -117,6 +120,16 @@ function MainShell({
     void clearUpdate;
   }, [clearUpdate]);
   void clearUpdate;
+
+  /* route-driven title, scroll-to-top, and focus on screen change */
+  useEffect(() => {
+    document.title =
+      route.screen === "report"
+        ? `${route.date} — ${CONFIG.formTitle}`
+        : CONFIG.formTitle;
+    window.scrollTo(0, 0);
+    screenTitleRef.current?.focus();
+  }, [route]);
 
   /* theme from Dexie settings (auto | light | dark) */
   const theme = useLiveQuery(
@@ -147,8 +160,14 @@ function MainShell({
     }
   }, [theme]);
 
-  return (
-    <>
+  return (      <>
+      <a
+        href="#main"
+        className="skip-link"
+        data-testid="skip-link"
+      >
+        Skip to main content
+      </a>
       <header
         ref={headerRef}
         className="sticky top-0 z-40 px-3 pt-2 pb-2 flex items-center gap-3"
@@ -170,7 +189,7 @@ function MainShell({
           >
             {CONFIG.formTitle}
           </h1>
-          <p className="text-[9px] leading-tight opacity-80 mt-0.5">{CONFIG.motto}</p>
+          <p className="text-[12px] leading-tight opacity-80 mt-0.5">{CONFIG.motto}</p>
         </div>
         <button
           type="button"
@@ -202,11 +221,17 @@ function MainShell({
             minHeight: 48,
           }}
         >
-          <Icon name="lock" size={20} />
+          <Icon name="gear" size={20} />
         </button>
       </header>
 
-      <DiaryScreen date={date} onDate={setDate} />
+      <main id="main" ref={screenTitleRef} tabIndex={-1}>
+        {route.screen === "report" ? (
+          <DiaryScreen date={route.date} onDate={replaceReport} />
+        ) : (
+          <Home />
+        )}
+      </main>
 
       <footer
         className="px-4 py-6 text-center text-xs md:text-sm"
@@ -233,11 +258,9 @@ function MainShell({
 
       {updateMsg && (
         <div
-          role="status"
           data-testid="update-banner"
-          className="fixed left-4 right-4 z-50 p-3 rounded-xl shadow-lg flex items-center gap-3"
+          className="mt-3 px-3 py-2 rounded-xl flex items-center gap-3"
           style={{
-            top: "calc(env(safe-area-inset-top,0px) + 8px)",
             background: "var(--band)",
             color: "var(--on-band)",
           }}
@@ -250,9 +273,9 @@ function MainShell({
             type="button"
             className="font-display text-lg"
             style={{ color: "var(--accent)" }}
-            onClick={() => location.reload()}
+            onClick={clearUpdate}
           >
-            Reload
+            Later
           </button>
         </div>
       )}
@@ -340,16 +363,14 @@ function SettingsSheet({
       <p className="text-sm mb-4" style={{ color: "var(--muted)" }}>
         Voice: use your keyboard's mic for offline dictation. Weather suggestions are
         off in this demo.
-      </p>
-
-      <button
-        type="button"
-        data-testid="switch-phone-off"
-        className="chip w-full justify-center mb-1"
-        onClick={() => void switchOff()}
-      >
-        <Icon name="lock" size={16} /> Switch this phone off
-      </button>
+      </p>        <button
+          type="button"
+          data-testid="switch-phone-off"
+          className="chip w-full justify-center mb-1"
+          onClick={() => void switchOff()}
+        >
+          <Icon name="gear" size={16} /> Lock this phone
+        </button>
       <p className="text-xs" style={{ color: "var(--muted)" }}>
         Returns to the activation gate. Reports stay on this device.
       </p>
