@@ -68,6 +68,27 @@ export function hasHomeHistoryEntry(): boolean {
   return location.hash === "#/" || location.hash === "" || location.hash === "#home";
 }
 
+/* ---- sheet history marker ------------------------------------------- */
+
+const SHEET_MARKER = Symbol.for("site-diary-sheet");
+
+function createSheetEntry(): object {
+  return { [SHEET_MARKER]: true } as Record<symbol, true>;
+}
+
+export function pushSheetHistory(): void {
+  history.pushState(createSheetEntry(), "", location.href);
+}
+
+export function isSheetHistoryEntry(state: unknown): state is object {
+  return (
+    state !== null &&
+    typeof state === "object" &&
+    !Array.isArray(state) &&
+    SHEET_MARKER in state
+  );
+}
+
 /* ---- React hook ------------------------------------------------------- */
 
 import { useEffect, useState } from "react";
