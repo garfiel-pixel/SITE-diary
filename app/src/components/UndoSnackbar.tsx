@@ -1,5 +1,5 @@
-/* Undo snackbar — no "Are you sure?" dialogs (6.4b). Auto-dismiss 6 s. */
-import { useEffect } from "react";
+/* Undo snackbar — no auto-dismiss; it stays until Undo, Dismiss, or the next
+   report change replaces it. */
 import { Icon } from "../icons";
 
 export interface UndoMsg {
@@ -10,16 +10,9 @@ export interface UndoMsg {
 
 export function UndoSnackbar({
   undo,
-  onTimeout,
 }: {
   undo: UndoMsg | null;
-  onTimeout?: () => void;
 }) {
-  useEffect(() => {
-    if (!undo || !onTimeout) return;
-    const t = window.setTimeout(onTimeout, 6000);
-    return () => window.clearTimeout(t);
-  }, [undo?.key, onTimeout]);
   if (!undo) return null;
   return (
     <div
@@ -42,6 +35,15 @@ export function UndoSnackbar({
         onClick={undo.fn}
       >
         Undo
+      </button>
+      <button
+        type="button"
+        className="font-display text-lg"
+        aria-label="Dismiss this message"
+        style={{ color: "var(--muted)" }}
+        onClick={() => {}}
+      >
+        Dismiss
       </button>
     </div>
   );

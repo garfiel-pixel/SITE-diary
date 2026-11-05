@@ -35,9 +35,9 @@ import { ToolboxSection } from "./ToolboxSection";
 import { WorkforceSection } from "./WorkforceSection";
 import { PhotoSection } from "./PhotoSection";
 import { UndoSnackbar, type UndoMsg } from "../components/UndoSnackbar";
+import { tick } from "../lib/haptics";
 import { SheetWrap } from "../components/SheetWrap";
 import { withTransition } from "../lib/vt";
-import { tick } from "../lib/haptics";
 
 /* ---- label maps (single definition) ---- */
 export const WEATHER_LABELS: { key: WeatherKey; label: string; icon: string }[] = [
@@ -1690,7 +1690,7 @@ export function DiaryScreen({
         }}
       />
 
-      <UndoSnackbar undo={undo} onTimeout={() => setUndo(null)} />
+      <  UndoSnackbar undo={undo} />
 
       {pdfError && (
         <div
