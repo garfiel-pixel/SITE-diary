@@ -11,8 +11,11 @@ import { ActivationGate } from "./components/ActivationGate";
 import { DiaryScreen } from "./diary/DiaryScreen";
 import { Home } from "./Home";
 import { SheetWrap } from "./components/SheetWrap";
+import { UndoSnackbar } from "./components/UndoSnackbar";
+import { useUndo } from "./components/undo";
 import { Icon, ALL_ICONS } from "./icons";
-import { useRoute, replaceReport, goHome } from "./lib/route";
+import { useRoute, replaceReport } from "./lib/route";
+import { fmtFull } from "./lib/format";
 
 /* ---- logo img: supplied JPG, unmodified, from /public (preloaded) ---- */
 const logoUrl = "/brand/logo.jpg";
@@ -93,8 +96,9 @@ function MainShell({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateMsg, setUpdateMsg] = useState(!!updateReady);
   const headerRef = useRef<HTMLElement | null>(null);
-  const screenTitleRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
   const route = useRoute();
+  const undo = useUndo();
 
   /* Publish the live header height so the sticky summary strip can sit
      directly beneath it (safe areas and logo size included). */
@@ -116,19 +120,30 @@ function MainShell({
   useEffect(() => {
     if (updateReady) setUpdateMsg(true);
   }, [updateReady]);
-  useEffect(() => {
-    void clearUpdate;
-  }, [clearUpdate]);
-  void clearUpdate;
 
-  /* route-driven title, scroll-to-top, and focus on screen change */
+  /* route-driven title, scroll-to-top, and focus on the screen's h2 */
   useEffect(() => {
     document.title =
       route.screen === "report"
-        ? `${route.date} — ${CONFIG.formTitle}`
-        : CONFIG.formTitle;
+        ? `Site diary — ${fmtFull(route.date)}`
+        : "Pave-Con Site Diary";
+    /* Invalid deep links render home; tidy the address so refresh/reload
+       cannot land on a broken route again. */
+    if (
+      route.screen === "home" &&
+      location.hash &&
+      location.hash !== "#/" &&
+      location.hash !== "#/home"
+    ) {
+      history.replaceState(history.state, "", "#/");
+    }
     window.scrollTo(0, 0);
-    screenTitleRef.current?.focus();
+    const main = mainRef.current;
+    const headings = main?.querySelectorAll<HTMLElement>("[data-screen-heading]");
+    const heading = headings?.length
+      ? headings[headings.length - 1]
+      : main?.querySelector<HTMLElement>("h2");
+    (heading ?? main)?.focus();
   }, [route]);
 
   /* theme from Dexie settings (auto | light | dark) */
@@ -160,11 +175,17 @@ function MainShell({
     }
   }, [theme]);
 
-  return (      <>
+  return (
+    <>
       <a
         href="#main"
         className="skip-link"
         data-testid="skip-link"
+        onClick={(e) => {
+          e.preventDefault();
+          mainRef.current?.focus();
+          mainRef.current?.scrollIntoView({ block: "start" });
+        }}
       >
         Skip to main content
       </a>
@@ -189,7 +210,7 @@ function MainShell({
           >
             {CONFIG.formTitle}
           </h1>
-          <p className="text-[12px] leading-tight opacity-80 mt-0.5">{CONFIG.motto}</p>
+          <p className="text-xs leading-tight opacity-80 mt-0.5">{CONFIG.motto}</p>
         </div>
         <button
           type="button"
@@ -225,7 +246,36 @@ function MainShell({
         </button>
       </header>
 
-      <main id="main" ref={screenTitleRef} tabIndex={-1}>
+      {/* Update prompt in normal flow, never covering the header controls. */}
+      {updateMsg && (
+        <div
+          data-testid="update-banner"
+          className="px-3 py-2 flex items-center gap-3"
+          style={{
+            background: "var(--band)",
+            color: "var(--on-band)",
+            borderTop: "1px solid #3a3a3a",
+          }}
+        >
+          <Icon name="cloudUploading" size={20} />
+          <span className="text-sm flex-1 font-semibold">
+            Update ready — reload when convenient
+          </span>
+          <button
+            type="button"
+            className="chip"
+            style={{ color: "var(--on-band)", borderColor: "#4a4a4a", background: "transparent" }}
+            onClick={() => {
+              setUpdateMsg(false);
+              clearUpdate();
+            }}
+          >
+            Later
+          </button>
+        </div>
+      )}
+
+      <main id="main" ref={mainRef} tabIndex={-1}>
         {route.screen === "report" ? (
           <DiaryScreen date={route.date} onDate={replaceReport} />
         ) : (
@@ -247,7 +297,7 @@ function MainShell({
         <p className="opacity-80">
           {CONFIG.contact.phone} · {CONFIG.contact.email}
         </p>
-        <p className="opacity-60 mt-2 text-[10px]">{CONFIG.contactNote}</p>
+        <p className="opacity-60 mt-2 text-xs">{CONFIG.contactNote}</p>
       </footer>
 
       <SettingsSheet
@@ -256,29 +306,7 @@ function MainShell({
         theme={theme ?? "auto"}
       />
 
-      {updateMsg && (
-        <div
-          data-testid="update-banner"
-          className="mt-3 px-3 py-2 rounded-xl flex items-center gap-3"
-          style={{
-            background: "var(--band)",
-            color: "var(--on-band)",
-          }}
-        >
-          <Icon name="cloudUploading" size={20} />
-          <span className="text-sm flex-1 font-semibold">
-            Update ready — tap Reload when convenient
-          </span>
-          <button
-            type="button"
-            className="font-display text-lg"
-            style={{ color: "var(--accent)" }}
-            onClick={clearUpdate}
-          >
-            Later
-          </button>
-        </div>
-      )}
+      <UndoSnackbar undo={undo} />
     </>
   );
 }
@@ -363,16 +391,17 @@ function SettingsSheet({
       <p className="text-sm mb-4" style={{ color: "var(--muted)" }}>
         Voice: use your keyboard's mic for offline dictation. Weather suggestions are
         off in this demo.
-      </p>        <button
-          type="button"
-          data-testid="switch-phone-off"
-          className="chip w-full justify-center mb-1"
-          onClick={() => void switchOff()}
-        >
-          <Icon name="gear" size={16} /> Lock this phone
-        </button>
+      </p>
+      <button
+        type="button"
+        data-testid="switch-phone-off"
+        className="chip w-full justify-center mb-1"
+        onClick={() => void switchOff()}
+      >
+        <Icon name="lock" size={16} /> Lock this phone
+      </button>
       <p className="text-xs" style={{ color: "var(--muted)" }}>
-        Returns to the activation gate. Reports stay on this device.
+        Returns to the activation screen. Reports stay on this device.
       </p>
     </SheetWrap>
   );
@@ -404,7 +433,7 @@ export function IconGallery() {
           >
             <Icon name={n} size={24} />
             <Icon name={n} size={48} duo />
-            <span className="text-[9px] truncate w-full text-center" title={n}>
+            <span className="text-xs w-full text-center break-all" title={n}>
               {n}
             </span>
           </div>

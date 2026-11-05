@@ -18,3 +18,8 @@ playwright-report/
 .env
 .env.*
 !.env.example
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example

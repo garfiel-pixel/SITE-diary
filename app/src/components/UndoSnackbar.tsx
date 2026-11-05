@@ -1,25 +1,18 @@
 /* Undo snackbar — no auto-dismiss; it stays until Undo, Dismiss, or the next
-   report change replaces it. */
+   report change replaces/clears it. Rendered once by the app shell so it can
+   survive navigation to the home screen. */
 import { Icon } from "../icons";
+import { clearUndo, type UndoMsg } from "./undo";
 
-export interface UndoMsg {
-  msg: string;
-  fn: () => void;
-  key: number;
-}
-
-export function UndoSnackbar({
-  undo,
-}: {
-  undo: UndoMsg | null;
-}) {
+export function UndoSnackbar({ undo }: { undo: UndoMsg | null }) {
   if (!undo) return null;
   return (
     <div
       role="status"
       data-testid="undo-snackbar"
-      className="fixed left-1/2 -translate-x-1/2 z-50 p-3 rounded-xl shadow-lg flex items-center gap-4"
+      className="fixed left-1/2 -translate-x-1/2 z-[70] p-3 rounded-xl shadow-lg flex flex-wrap items-center justify-center gap-3"
       style={{
+        maxWidth: "calc(100vw - 24px)",
         bottom: "calc(env(safe-area-inset-bottom, 0px) + 84px)",
         background: "var(--band)",
         color: "var(--on-band)",
@@ -31,7 +24,7 @@ export function UndoSnackbar({
         type="button"
         className="font-display text-lg"
         aria-label="Undo last change"
-        style={{ color: "var(--accent)" }}
+        style={{ color: "var(--accent)", minHeight: 48, minWidth: 48 }}
         onClick={undo.fn}
       >
         Undo
@@ -40,8 +33,8 @@ export function UndoSnackbar({
         type="button"
         className="font-display text-lg"
         aria-label="Dismiss this message"
-        style={{ color: "var(--muted)" }}
-        onClick={() => {}}
+        style={{ color: "var(--on-band)", minHeight: 48, minWidth: 48 }}
+        onClick={clearUndo}
       >
         Dismiss
       </button>

@@ -22,7 +22,7 @@ import {
 import { fmtDay, fmtFull, fmtTime, fmtBytes, fmtHours } from "../lib/format";
 import { SEED } from "../seed";
 import { registerFlush, clearFlush, flushNow } from "../lib/autosave";
-import { goHome } from "../lib/route";
+import { goAllReports } from "../lib/route";
 import { Icon } from "../icons";
 import {
   SectionCard,
@@ -34,7 +34,7 @@ import {
 import { ToolboxSection } from "./ToolboxSection";
 import { WorkforceSection } from "./WorkforceSection";
 import { PhotoSection } from "./PhotoSection";
-import { UndoSnackbar, type UndoMsg } from "../components/UndoSnackbar";
+import { showUndo, clearUndo } from "../components/undo";
 import { tick } from "../lib/haptics";
 import { SheetWrap } from "../components/SheetWrap";
 import { withTransition } from "../lib/vt";
@@ -103,35 +103,41 @@ function toggle(
 
 /* =================== small building blocks =================== */
 
-/** Date navigation — available before a report exists too (6.3). */
-function StickyBack({ onBack }: { onBack: () => void }) {
+/** Sticky back bar — always directly under the app header, outside the
+ *  collapsible sections. Visible text, never an icon-only control. */
+function ReportBar({ date, onBack }: { date: string; onBack: () => void }) {
   return (
     <div
-      className="sticky top-0 z-40"
+      className="report-bar sticky z-40 flex items-center gap-3 px-3"
       style={{
+        top: "var(--header-h, 0px)",
         background: "var(--band)",
         color: "var(--on-band)",
-        padding: "8px 12px",
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
+        minHeight: 56,
       }}
     >
       <button
         type="button"
-        className="btn-56"
-        aria-label="Back to home"
-        data-testid="sticky-back"
+        className="chip shrink-0"
+        data-testid="all-reports"
+        style={{
+          background: "var(--surface)",
+          color: "var(--text)",
+          borderColor: "var(--rule)",
+          minHeight: 48,
+        }}
         onClick={onBack}
       >
-        <Icon name="chevronLeft" size={22} />
+        ← All reports
       </button>
-      <h1
-        className="font-display text-base leading-[1.05]"
+      <h2
+        tabIndex={-1}
+        data-screen-heading
+        className="font-display text-base leading-tight min-w-0 break-words"
         style={{ color: "var(--on-band)" }}
       >
-        {CONFIG.formTitle}
-      </h1>
+        {fmtFull(date)}
+      </h2>
     </div>
   );
 }
@@ -475,7 +481,6 @@ export function DiaryScreen({
   const [mode, setMode] = useState<"loading" | "ready" | "empty">("loading");
   const [prev, setPrev] = useState<Report | null>(null);
   const [savedAt, setSavedAt] = useState("Saved on phone");
-  const [undo, setUndo] = useState<UndoMsg | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ "sec-project": true });
   const [pdfSheet, setPdfSheet] = useState<{ name: string; bytes: number; pages: number } | null>(null);
   const [recordedError, setRecordedError] = useState(false);
@@ -484,7 +489,6 @@ export function DiaryScreen({
   const [saveStatus, setSaveStatus] = useState("");
 
   const announceSaveStatus = useCallback((ok: boolean) => {
-    if (!r) return;
     if (ok) {
       setSaveStatus("Saved");
       window.setTimeout(() => setSaveStatus(""), 1500);
@@ -492,16 +496,30 @@ export function DiaryScreen({
       setSaveStatus("Not saved");
       window.setTimeout(() => setSaveStatus(""), 4000);
     }
-  }, [r]);
+  }, []);
   const [building, setBuilding] = useState(false);
   const [carryWip, setCarryWip] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [otherSheet, setOtherSheet] = useState<null | "equipment" | "material" | "visitor">(null);
   const savedTimer = useRef<number | undefined>(undefined);
+  const deletingRef = useRef(false);
+
+  const SAVE_ERROR =
+    "Not saved — storage problem. Export the PDF now to keep your work.";
 
   registerFlush(async () => {
-    if (!r) return;
-    await db.reports.put({ ...r, updatedAt: Date.now() });
+    window.clearTimeout(savedTimer.current);
+    savedTimer.current = undefined;
+    if (!r || deletingRef.current) return;
+    try {
+      await db.reports.put({ ...r, updatedAt: Date.now() });
+      setSavedAt(`Saved on phone · ${fmtTime(Date.now())}`);
+      setSaveError(null);
+      announceSaveStatus(true);
+    } catch {
+      setSaveError(SAVE_ERROR);
+      announceSaveStatus(false);
+    }
   });
   useEffect(() => {
     return () => {
@@ -535,17 +553,25 @@ export function DiaryScreen({
   const saveSoon = useCallback((report: Report) => {
     window.clearTimeout(savedTimer.current);
     savedTimer.current = window.setTimeout(async () => {
-      await db.reports.put(report);
-      const asked = await getSetting<boolean>("persistAsked");
-      if (!asked) {
-        void navigator.storage?.persist?.();
-        await setSetting("persistAsked", true);
+      try {
+        await db.reports.put(report);
+        const asked = await getSetting<boolean>("persistAsked");
+        if (!asked) {
+          void navigator.storage?.persist?.();
+          await setSetting("persistAsked", true);
+        }
+        setSavedAt(`Saved on phone · ${fmtTime(Date.now())}`);
+        setSaveError(null);
+        announceSaveStatus(true);
+      } catch {
+        /* Never claim a save that did not happen. */
+        setSaveError(
+          "Not saved — storage problem. Export the PDF now to keep your work."
+        );
+        announceSaveStatus(false);
       }
-      setSavedAt(`Saved on phone · ${fmtTime(Date.now())}`);
-      setSaveError(null);
-      announceSaveStatus(true);
     }, 400);
-  }, []);
+  }, [announceSaveStatus]);
 
   useEffect(() => {
     if (!saveError) return;
@@ -577,6 +603,7 @@ export function DiaryScreen({
 
   const update = useCallback(
     (patch: ((r0: Report) => Partial<Report>) | Partial<Report>) => {
+      clearUndo();
       setR((old) => {
         if (!old) return old;
         const p = typeof patch === "function" ? patch(old) : patch;
@@ -654,19 +681,19 @@ export function DiaryScreen({
     setOpen((o) => ({ ...o, "sec-project": true }));
     tick();
     const copiedId = blank.id;
-    setUndo({
+    showUndo({
       key: Date.now(),
       msg: "Copied from yesterday",
       fn: () => {
         void db.reports.delete(copiedId);
-        setUndo(null);
+        clearUndo();
         setR(null);
         setMode("empty");
       },
     });
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const el = document.getElementById("rec-by");
+        const el = document.getElementById("mi-project");
         if (el) el.focus();
       });
     });
@@ -699,7 +726,7 @@ export function DiaryScreen({
     setOpen((o) => ({ ...o, "sec-project": true }));
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const el = document.getElementById("rec-by");
+        const el = document.getElementById("mi-project");
         if (el) el.focus();
       });
     });
@@ -708,16 +735,19 @@ export function DiaryScreen({
   const deleteSample = () => {
     if (!r) return;
     const deleted = r;
+    deletingRef.current = true;
+    window.clearTimeout(savedTimer.current);
+    savedTimer.current = undefined;
     void db.reports.delete(deleted.id);
-    setUndo({
+    showUndo({
       key: Date.now(),
       msg: "Sample report deleted",
       fn: () => {
         void db.reports.put(deleted);
-        setUndo(null);
+        clearUndo();
       },
     });
-    void goHome();
+    goAllReports();
   };
 
   /* ---- summary numbers ---- */
@@ -819,12 +849,12 @@ export function DiaryScreen({
     };
 
     update(remove);
-    setUndo({
+    showUndo({
       key: Date.now(),
       msg: `${rowName} removed — tap Undo to restore`,
       fn: () => {
         update(restore);
-        setUndo(null);
+        clearUndo();
       },
     });
   };
@@ -867,12 +897,12 @@ export function DiaryScreen({
     };
 
     update(remove);
-    setUndo({
+    showUndo({
       key: Date.now(),
       msg: `${label} removed — tap Undo to restore`,
       fn: () => {
         update(restore);
-        setUndo(null);
+        clearUndo();
       },
     });
   };
@@ -968,8 +998,6 @@ export function DiaryScreen({
       setR(withStamp);
       await db.reports.put(withStamp);
       pdfBlobRef.current = out.blob;
-      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-      pdfUrlRef.current = URL.createObjectURL(out.blob);
       withTransition(() => setPdfSheet({ name: out.name, bytes: out.bytes, pages: out.pages }));
       tick();
       // The report is queued for the mock upload; try now if we are online.
@@ -982,14 +1010,7 @@ export function DiaryScreen({
       setBuilding(false);
     }
   };
-  const pdfUrlRef = useRef<string | null>(null);
   const pdfBlobRef = useRef<Blob | null>(null);
-  useEffect(
-    () => () => {
-      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-    },
-    []
-  );
 
   /* Active-section highlight for the completeness chips (6.5). */
   useEffect(() => {
@@ -1018,12 +1039,12 @@ export function DiaryScreen({
         msg: string;
         perform: () => void | Promise<void>;
       };
-      setUndo({
+      showUndo({
         key: d.key,
         msg: d.msg,
         fn: () => {
           void d.perform();
-          setUndo(null);
+          clearUndo();
         },
       });
     };
@@ -1031,50 +1052,73 @@ export function DiaryScreen({
     return () => window.removeEventListener("diary-undo", handler);
   }, []);
 
-  /* No awaits before share(): phones only allow navigator.share directly
-     after the tap (transient activation). The blob is already in memory. */
+  const pdfFileName = () =>
+    (pdfSheet?.name ?? "site-diary.pdf").replace(/[\\/:*?"<>|]+/g, "-");
+
+  const savePdf = () => {
+    const blob = pdfBlobRef.current;
+    if (!blob) return;
+    const name = pdfFileName();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.rel = "noopener";
+    a.style.display = "none";
+    /* iOS Safari ignores clicks on detached anchors and can ignore downloads
+       for blob URLs, so the anchor must be in the document and a new tab is a
+       safe second path to the PDF viewer / share sheet. */
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      window.open(url, "_blank", "noopener");
+    }
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
   const sharePdf = async () => {
     const blob = pdfBlobRef.current;
     if (!blob) return;
-    const name = pdfSheet?.name ?? "site-diary.pdf";
-    const file = new File([blob], name, { type: "application/pdf" });
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
+    const name = pdfFileName();
+    try {
+      const file = new File([blob], name, { type: "application/pdf" });
+      if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: name });
-      } catch (err) {
-        if ((err as Error).name !== "AbortError")
-          setPdfError("Sharing was refused — use Save to phone instead.");
+        return;
       }
-    } else {
-      savePdf();
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      /* Some mobile browsers expose share but refuse PDF files; fall through
+         to Save to phone instead of leaving the user with an error only. */
     }
-  };
-  const savePdf = () => {
-    if (!pdfUrlRef.current) return;
-    const a = document.createElement("a");
-    a.href = pdfUrlRef.current;
-    a.download = pdfSheet?.name ?? "site-diary.pdf";
-    a.rel = "noopener";
-    a.click();
+    savePdf();
   };
 
   /* ==================== render ==================== */
   if (mode === "loading")
     return (
-      <div className="p-6 text-sm" style={{ color: "var(--muted)" }}>
-        <StickyBack onBack={() => { void leave(); goHome(); }}
-        />
-        <p role="status">Loading diary…</p>
-        <div className="sr-only" role="status" aria-live="polite">{saveStatus}</div>
+      <div className="max-w-3xl mx-auto">
+        <ReportBar date={date} onBack={goAllReports} />
+        <div className="p-6 text-sm" style={{ color: "var(--muted)" }}>
+          <p role="status">Loading diary…</p>
+        </div>
       </div>
     );
 
   if (mode === "empty") {
     return (
-      <div className="p-4 max-w-3xl mx-auto">
-        <StickyBack onBack={() => { void leave(); goHome(); }} />
-        <div className="card p-4" id="newday-card">
-          <h2 className="font-display text-2xl mb-1">No report for this date yet</h2>
+      <div className="max-w-3xl mx-auto">
+        <ReportBar date={date} onBack={goAllReports} />
+        <div className="p-4">
+          <div className="card p-4" id="newday-card">
+            <h2
+              className="font-display text-2xl mb-1"
+              tabIndex={-1}
+              data-screen-heading
+            >
+              No report for this date yet
+            </h2>
           <p className="text-sm mb-2" style={{ color: "var(--muted)" }}>
             {fmtFull(date)} · {fmtDay(date)}
           </p>
@@ -1125,6 +1169,7 @@ export function DiaryScreen({
             Start a blank report
           </button>
         </div>
+        </div>
       </div>
     );
   }
@@ -1133,36 +1178,30 @@ export function DiaryScreen({
 
   return (
     <div className="max-w-3xl mx-auto">
+      <ReportBar date={date} onBack={goAllReports} />
+      <div className="sr-only" role="status" aria-live="polite" data-testid="save-status">
+        {saveStatus}
+      </div>
       {saveError && (
         <div
           role="alert"
           data-testid="persist-failure"
           className="fixed left-3 right-3 z-50 p-3 rounded-xl shadow-lg flex items-center gap-3"
           style={{
-            top: "var(--header-h, 96px)",
+            top: "calc(var(--header-h, 96px) + 56px)",
             background: "var(--band)",
             color: "var(--on-band)",
           }}
         >
           <Icon name="warning" size={20} />
-          <span className="text-sm font-semibold flex-1">
-            Could not save on phone: {saveError}
-          </span>
-          <button
-            type="button"
-            className="font-display text-lg"
-            style={{ color: "var(--accent)" }}
-            onClick={() => setSaveError(null)}
-          >
-            Dismiss
-          </button>
+          <span className="text-sm font-semibold flex-1">{saveError}</span>
         </div>
       )}
 
-      {/* sticky summary strip, directly under the live header height */}
+      {/* sticky summary strip, directly under the report bar */}
       <div
         className="summary-strip sticky z-30"
-        style={{ top: "var(--header-h, 96px)" }}
+        style={{ top: "calc(var(--header-h, 96px) + 56px)" }}
 
         data-testid="summary-strip"
       >
@@ -1370,7 +1409,7 @@ export function DiaryScreen({
                   <button
                     type="button"
                     aria-label={`Remove ${m.name}`}
-                    className="btn-56 !min-h-10 !min-w-10"
+                    className="btn-56 !min-h-12 !min-w-12"
                     onClick={() => withTransition(() => deleteRow("materials", m.id))}
                   >
                     <Icon name="trash" size={18} />
@@ -1690,8 +1729,6 @@ export function DiaryScreen({
         }}
       />
 
-      <  UndoSnackbar undo={undo} />
-
       {pdfError && (
         <div
           role="alert"
@@ -1737,7 +1774,7 @@ const EquipmentRowView = memo(function EquipmentRowView({
         <button
           type="button"
           aria-label={`Remove ${row.name}`}
-          className="btn-56 !min-h-10 !min-w-10"
+          className="btn-56 !min-h-12 !min-w-12"
           onClick={() => onDelete(row.id)}
         >
           <Icon name="trash" size={18} />
@@ -1798,7 +1835,7 @@ function StatusChip({
       }}
       data-active={active ? "true" : "false"}
       aria-label={`${label}: ${done ? "complete" : "not yet"} — jump to section`}
-      className="chip !min-h-10 shrink-0"
+      className="chip !min-h-12 shrink-0"
       style={{ fontSize: 13 }}
     >
       {done ? (

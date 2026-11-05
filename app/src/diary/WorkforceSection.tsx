@@ -183,7 +183,7 @@ export function WorkforceSection({
                   </span>
                   <button
                     type="button"
-                    className="btn-56 !min-h-10 !min-w-10"
+                    className="btn-56 !min-h-12 !min-w-12"
                     aria-label={`Edit ${label}`}
                     onClick={() => openEdit(person)}
                   >
@@ -191,7 +191,7 @@ export function WorkforceSection({
                   </button>
                   <button
                     type="button"
-                    className="btn-56 !min-h-10 !min-w-10"
+                    className="btn-56 !min-h-12 !min-w-12"
                     aria-label={`Remove ${label}`}
                     onClick={() => onDeletePerson(group, person.id)}
                   >
@@ -288,7 +288,7 @@ function PersonSheet({
           </div>
           <button
             type="button"
-            className="btn-56 !min-h-10 !min-w-10"
+            className="btn-56 !min-h-12 !min-w-12"
             aria-label="Close"
             onClick={onClosed}
           >
@@ -326,7 +326,7 @@ function PersonSheet({
                 <button
                   key={n}
                   type="button"
-                  className={`chip !min-h-10 ${name === n ? "on" : ""}`}
+                  className={`chip !min-h-12 ${name === n ? "on" : ""}`}
                   onClick={() => {
                     tick();
                     setName(n);
@@ -370,7 +370,7 @@ function PersonSheet({
               <button
                 key={r}
                 type="button"
-                className={`chip !min-h-10 ${role === r ? "on" : ""}`}
+                className={`chip !min-h-12 ${role === r ? "on" : ""}`}
                 aria-pressed={role === r}
                 onClick={() => {
                   tick();

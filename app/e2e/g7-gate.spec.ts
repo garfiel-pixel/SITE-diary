@@ -40,7 +40,7 @@ test.describe("G7 — demo access gate", () => {
 
     // 5. Switch this phone off returns to the gate; reports are retained.
     await page.getByTestId("open-settings").click();
-    await expect(page.getByRole("button", { name: /Switch this phone off/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Lock this phone/i })).toBeVisible();
     await page.getByTestId("switch-phone-off").click();
     await expect(page.getByLabel(BOX)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("app-header")).toHaveCount(0);

@@ -726,6 +726,7 @@ button:disabled {
   cursor: ew-resize;
   border-block: 1px solid var(--rule);
   outline-offset: 4px;
+  contain: layout paint style;
 }
 .tape-thumb {
   min-width: 64px;

@@ -20,11 +20,14 @@ export async function activate(page: Page) {
   await page.keyboard.type(CODE, { delay: 10 });
   await page.getByRole("button", { name: "ACTIVATE" }).click();
   await expect(page.getByTestId("app-header")).toBeVisible({ timeout: 15_000 });
+  await waitForSeed(page);
+  await openEditor(page, TODAY_ISO);
   resetAudit(page);
 }
 
-/** Directly writes the activation setting through IndexedDB (faster for gates
- *  that don't test the gate itself). */
+/** Directly writes the activation setting through IndexedDB and waits until
+ *  the main shell is actually rendered (the live query can lag behind the
+ *  write on reload). */
 export async function activateDb(page: Page) {
   await page.goto("/");
   await page.evaluate(async () => {
@@ -41,7 +44,19 @@ export async function activateDb(page: Page) {
     });
   });
   await page.reload();
-  await expect(page.getByTestId("app-header")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-testid="app-header"]')).toBeVisible({ timeout: 30_000 });
+  await waitForSeed(page);
+  await openEditor(page, TODAY_ISO);
+}
+
+/** Waits until the seeded sample report is available on a fresh profile. */
+export async function waitForSeed(page: Page) {
+  await expect
+    .poll(async () => tableCount(page, "reports").catch(() => 0), {
+      timeout: 20_000,
+      intervals: [100, 250, 500],
+    })
+    .toBeGreaterThan(0);
 }
 
 /** Counts rows in a store using plain IndexedDB (works against prod build). */
@@ -75,8 +90,29 @@ export async function setRecordedBy(page: Page, name: string) {
   await input.blur();
 }
 
+/** Ensures the diary editor is open for `isoDate`, starting from home when
+ *  necessary. Home is the launch screen now, so old tests must navigate to the
+ *  editor explicitly instead of relying on an auto-opened report. */
+export async function openEditor(page: Page, isoDate: string = TODAY_ISO) {
+  if (page.url().includes(`#/report/${isoDate}`)) {
+    await expect(
+      page.locator("#sec-project, #newday-card").first()
+    ).toBeVisible({ timeout: 15_000 });
+    return;
+  }
+  await page.goto(`#/report/${isoDate}`);
+  await expect(
+    page.locator("#sec-project, #newday-card").first()
+  ).toBeVisible({ timeout: 15_000 });
+}
+
 /** Navigates the diary to a specific ISO date, with or without a report. */
 export async function setDate(page: Page, isoDate: string) {
+  const inEditor = await page.locator("#sec-project, #newday-card").count();
+  if (!inEditor) {
+    await openEditor(page, isoDate);
+    return;
+  }
   const projectHeader = page.locator("#sec-project > h2 > button");
   if (await projectHeader.count()) await openSection(page, "sec-project");
   const input = page.locator('input[aria-label="Date"]').first();
@@ -158,7 +194,13 @@ export async function waitForPhotoCount(page: Page, isoDate: string, expected: n
 
 /** Starts today's report by copying yesterday (the demo path). */
 export async function copyFromYesterday(page: Page) {
-  await page.getByTestId("copy-from-yesterday").click();
+  if (!(await page.locator("#sec-project, #newday-card").count())) {
+    await openEditor(page, TODAY_ISO);
+  }
+  const copy = page.getByTestId("copy-from-yesterday");
+  if (await copy.count()) {
+    await copy.click();
+  }
   await expect(page.locator("#sec-project")).toBeVisible({ timeout: 10_000 });
 }
 

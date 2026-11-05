@@ -1,5 +1,5 @@
 /* Core reusable pieces: tape-measure slider, numpad sheet, quantity
-   stepper, lined textareas, section cards, chip rows, undo snackbar. */
+   stepper, lined textareas, section cards, chip rows. */
 import {
   memo,
   startTransition,
@@ -43,22 +43,11 @@ export function TapeSlider({ args, label }: { args: TapeArgs; label: string }) {
   const buttonValueRef = useRef<HTMLSpanElement | null>(null);
   const thumbRef = useRef<HTMLDivElement | null>(null);
 
-  /* Drag preview writes straight to the DOM. React only updates on release, so
-     a 60 fps drag does not reconcile the form on every pointer move. */
-  const paintPreview = (v: number, measuredWidth?: number) => {
-    const trackWidth = measuredWidth ?? track.current?.clientWidth ?? 0;
-    if (thumbRef.current) {
-      const x = (trackWidth * (v - min)) / (max - min);
-      thumbRef.current.style.transform = `translateX(${x}px)`;
-    }
-    /* Visible label follows the finger; ARIA stays on the committed value
-       (a screen reader only needs the value after release). */
-    if (numRef.current) numRef.current.textContent = fmtVal(v);
-  };
-
+  /* Commit only on release. Writing the marker on every pointer move caused
+     main-thread long tasks during a throttled drag, so the marker follows the
+     committed value instead. */
   const { track, bind, commit } = useTape({
     ...args,
-    onPreview: paintPreview,
     onPreviewEnd: (v) => {
       /* Non-urgent: React can interleave the report update on release. */
       startTransition(() => onChange(v));
@@ -766,43 +755,4 @@ export function ChipRow({
   );
 }
 
-/* ================= Undo snackbar (6.4b) ================================ */
 
-export interface UndoMsg {
-  msg: string;
-  fn: () => void;
-  key: number;
-}
-
-export function UndoSnackbar({ undo }: { undo: UndoMsg | null }) {
-  useEffect(() => {
-    if (!undo) return;
-    const t = window.setTimeout(() => {
-      document.dispatchEvent(new CustomEvent("undo-timeout", { detail: undo.key }));
-    }, 6000);
-    return () => window.clearTimeout(t);
-  }, [undo]);
-  if (!undo) return null;
-  return (
-    <div
-      role="status"
-      className="fixed left-1/2 -translate-x-1/2 z-50 p-3 rounded-xl shadow-lg flex items-center gap-4"
-      style={{
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 84px)",
-        background: "var(--band)",
-        color: "var(--on-band)",
-      }}
-    >
-      <Icon name="undo" size={20} />
-      <span className="text-sm font-semibold">{undo.msg}</span>
-      <button
-        type="button"
-        className="font-display text-lg"
-        style={{ color: "var(--accent)" }}
-        onClick={undo.fn}
-      >
-        Undo
-      </button>
-    </div>
-  );
-}

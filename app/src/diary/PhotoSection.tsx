@@ -323,7 +323,7 @@ function PhotoCard({
               <button
                 key={c}
                 type="button"
-                className="chip !min-h-10 text-xs"
+                className="chip !min-h-12 text-xs"
                 onClick={() => onDesc(c)}
                 aria-label={`Describe photo as ${c}`}
               >
@@ -335,7 +335,7 @@ function PhotoCard({
         <button
           type="button"
           aria-label="Remove photo"
-          className="btn-56 !min-h-10 !min-w-10 self-start"
+          className="btn-56 !min-h-12 !min-w-12 self-start"
           onClick={onDelete}
         >
           <Icon name="trash" size={18} />

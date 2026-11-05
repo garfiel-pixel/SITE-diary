@@ -34,7 +34,7 @@ test.describe("G16 — weather layout", () => {
 
     await activateDb(page);
     await setDate(page, BLANK_DAY);
-    await page.getByRole("button", { name: "Start blank page" }).click();
+    await page.getByRole("button", { name: "Start a blank report" }).click();
     await expect(page.locator("#sec-weather")).toBeVisible();
     await openSection(page, "sec-weather");
 

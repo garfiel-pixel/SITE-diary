@@ -1,7 +1,11 @@
 /* Hash router for Pave-Con Site Diary.
-   Single source of truth for the current screen: #/ and #home render the home
-   screen, #/report/YYYY-MM-DD renders the diary editor, and anything else
-   (including an invalid or missing date) falls back to the home screen. */
+   Single source of truth for the current screen: #/ (or no hash) renders the
+   home screen, #/report/YYYY-MM-DD renders the diary editor, and anything else
+   (including an invalid or missing date) falls back to the home screen.
+   location.hash is the only route state; browser Back/Forward, refresh and
+   deep links all work. */
+
+import { flushNow } from "./autosave";
 
 export type Screen = "home" | "report";
 
@@ -18,15 +22,16 @@ export interface ReportRoute {
 export type Route = HomeRoute | ReportRoute;
 
 const RE_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+const RE_REPORT = /^\/report\/([0-9]{4}-[0-9]{2}-[0-9]{2})$/;
 
 function validDate(s: string): s is string {
   if (!RE_DATE.test(s)) return false;
-  const d = new Date(s + "T00:00:00");
-  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const date = new Date(Date.UTC(y!, m! - 1, d!));
   return (
-    d.getUTCFullYear().toString() === s.slice(0, 4) &&
-    String(d.getUTCMonth() + 1).padStart(2, "0") === s.slice(5, 7) &&
-    String(d.getUTCDate()).padStart(2, "0") === s.slice(8, 10)
+    date.getUTCFullYear() === y &&
+    date.getUTCMonth() === m! - 1 &&
+    date.getUTCDate() === d
   );
 }
 
@@ -35,11 +40,9 @@ function parseHash(hash: string): Route {
   if (trimmed === "" || trimmed === "/" || trimmed === "/home") {
     return { screen: "home" };
   }
-  if (trimmed.startsWith("/report/")) {
-    const candidate = trimmed.slice("/report/".length).slice(0, 10);
-    if (validDate(candidate)) {
-      return { screen: "report", date: candidate };
-    }
+  const match = RE_REPORT.exec(trimmed);
+  if (match && validDate(match[1]!)) {
+    return { screen: "report", date: match[1]! };
   }
   return { screen: "home" };
 }
@@ -48,32 +51,63 @@ export function currentRoute(): Route {
   return parseHash(location.hash);
 }
 
+/** Tell useRoute() about a history change made with pushState/replaceState
+ *  (those calls do not fire hashchange themselves). */
+function notifyRoute() {
+  window.dispatchEvent(new Event("hashchange"));
+}
+
+/** Flush the diary's pending 400 ms autosave before leaving the editor. */
+function flushBeforeNavigate() {
+  void flushNow();
+}
+
 export function openReport(date: string): void {
   if (!validDate(date)) return;
-  history.pushState(null, "", `#/report/${date}`);
+  flushBeforeNavigate();
+  if (location.hash === `#/report/${date}`) return;
+  history.pushState({ fromHome: true }, "", `#/report/${date}`);
+  notifyRoute();
 }
 
 export function replaceReport(date: string): void {
   if (!validDate(date)) return;
-  history.replaceState(null, "", `#/report/${date}`);
-  const synthetic = new HashChangeEvent("hashchange", { newURL: location.href, oldURL: location.href });
-  window.dispatchEvent(synthetic);
+  flushBeforeNavigate();
+  if (location.hash === `#/report/${date}`) return;
+  history.replaceState(history.state, "", `#/report/${date}`);
+  notifyRoute();
 }
 
 export function goHome(): void {
+  flushBeforeNavigate();
+  if (currentRoute().screen === "home") return;
   history.pushState(null, "", "#/");
+  notifyRoute();
+}
+
+/** "← All reports": use the browser's own Back when the editor was opened
+ *  from home, otherwise replace the deep link with the home route. */
+export function goAllReports(): void {
+  flushBeforeNavigate();
+  if (history.state && history.state.fromHome) {
+    history.back();
+    return;
+  }
+  history.pushState(null, "", "#/");
+  notifyRoute();
 }
 
 export function hasHomeHistoryEntry(): boolean {
-  return location.hash === "#/" || location.hash === "" || location.hash === "#home";
+  const r = currentRoute();
+  return r.screen === "home";
 }
 
 /* ---- sheet history marker ------------------------------------------- */
 
-const SHEET_MARKER = Symbol.for("site-diary-sheet");
+const SHEET_MARKER = "__siteDiarySheet";
 
 function createSheetEntry(): object {
-  return { [SHEET_MARKER]: true } as Record<symbol, true>;
+  return { [SHEET_MARKER]: true };
 }
 
 export function pushSheetHistory(): void {
@@ -85,7 +119,7 @@ export function isSheetHistoryEntry(state: unknown): state is object {
     state !== null &&
     typeof state === "object" &&
     !Array.isArray(state) &&
-    SHEET_MARKER in state
+    (state as Record<string, unknown>)[SHEET_MARKER] === true
   );
 }
 
@@ -96,9 +130,21 @@ import { useEffect, useState } from "react";
 export function useRoute(): Route {
   const [route, setRoute] = useState<Route>(currentRoute());
   useEffect(() => {
-    const handler = () => setRoute(currentRoute());
+    const handler = () =>
+      setRoute((prev) => {
+        const next = currentRoute();
+        if (prev.screen === next.screen) {
+          if (prev.screen === "home" || next.screen === "home") return prev;
+          if (prev.date === next.date) return prev;
+        }
+        return next;
+      });
     window.addEventListener("hashchange", handler);
-    return () => window.removeEventListener("hashchange", handler);
+    window.addEventListener("popstate", handler);
+    return () => {
+      window.removeEventListener("hashchange", handler);
+      window.removeEventListener("popstate", handler);
+    };
   }, []);
   return route;
 }

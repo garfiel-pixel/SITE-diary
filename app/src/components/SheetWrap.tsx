@@ -14,8 +14,17 @@ const FOCUSABLES = [
   "input:not([disabled])",
   "select:not([disabled])",
   "textarea:not([disabled])",
-  "[tabindex]:not([tabindex=\"-1\"])",
+  '[tabindex]:not([tabindex="-1"])',
 ].join(",");
+
+function focusables(panel: HTMLElement): HTMLElement[] {
+  return Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLES)).filter(
+    (el) =>
+      el.offsetParent !== null &&
+      !el.hasAttribute("disabled") &&
+      el.getAttribute("aria-hidden") !== "true"
+  );
+}
 
 export function SheetWrap({
   opened,
@@ -33,78 +42,102 @@ export function SheetWrap({
   const backdropRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
   const [shows, setShows] = useState(false);
 
+  const closeThroughHistory = useCallback(() => {
+    if (isSheetHistoryEntry(history.state)) {
+      history.back();
+      return;
+    }
+    onClosed();
+  }, [onClosed]);
+
+  /* Open: remember the opener, add a history entry, then reveal the panel.
+     Close: reveal nothing and drop the history entry that belongs to it. */
   useEffect(() => {
-    if (opened) {
-      openerRef.current = document.activeElement as HTMLElement;
+    if (opened && !wasOpenRef.current) {
+      wasOpenRef.current = true;
+      openerRef.current = document.activeElement as HTMLElement | null;
       pushSheetHistory();
-    } else {
+      setShows(true);
+    } else if (!opened && wasOpenRef.current) {
+      wasOpenRef.current = false;
       setShows(false);
-      try {
-        history.back();
-      } catch {
-        /* ignore when there is no previous sheet entry */
-      }
+      if (isSheetHistoryEntry(history.state)) history.back();
     }
   }, [opened]);
 
+  /* The browser Back button (or a programmatic history.back) pops the sheet
+     entry. Close the sheet without pushing another history entry. */
   useEffect(() => {
     if (!shows) return;
     const onPop = () => {
-      if (!isSheetHistoryEntry(history.state)) return;
+      wasOpenRef.current = false;
+      setShows(false);
       onClosed();
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [shows, onClosed]);
 
+  /* Focus the first control inside the dialog on open, and return focus to
+     whatever opened it when the dialog closes. */
+  useEffect(() => {
+    if (shows) {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const items = focusables(panel);
+      (items[0] ?? panel).focus();
+    } else if (openerRef.current) {
+      const opener = openerRef.current;
+      openerRef.current = null;
+      if (document.contains(opener)) opener.focus();
+    }
+  }, [shows]);
+
+  /* Escape closes; Tab and Shift+Tab can never leave the dialog. */
   useEffect(() => {
     if (!shows) return;
-    const panel = panelRef.current;
-    if (!panel) return;
-
-    const onKeyDown = (e: Event) => {
-      const ke = e as unknown as KeyboardEvent & {
-        currentTarget: EventTarget;
-      };
-      if (ke.key === "Escape") {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      if (e.key === "Escape") {
         e.preventDefault();
-        onClosed();
+        closeThroughHistory();
         return;
       }
-      if (ke.key !== "Tab") return;
+      if (e.key !== "Tab") return;
 
-      const items = Array.from(
-        panel.querySelectorAll<HTMLElement>(FOCUSABLES)
-      ).filter((el) => el.offsetParent !== null && !el.hasAttribute("disabled"));
+      const items = focusables(panel);
       if (items.length === 0) {
         e.preventDefault();
+        panel.focus();
         return;
       }
-      const active = panel.ownerDocument.activeElement;
+      const active = document.activeElement as HTMLElement | null;
       const idx = items.indexOf(active as HTMLElement);
-      if (ke.shiftKey) {
+      if (e.shiftKey) {
         if (idx <= 0) {
           e.preventDefault();
-          items[items.length - 1]?.focus();
+          items[items.length - 1]!.focus();
         }
       } else if (idx < 0 || idx === items.length - 1) {
         e.preventDefault();
-        items[0]?.focus();
+        items[0]!.focus();
       }
     };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [shows, closeThroughHistory]);
 
-    panel.addEventListener("keydown", onKeyDown);
-    return () => panel.removeEventListener("keydown", onKeyDown);
-  }, [shows, onClosed]);
-
-  const close = useCallback(() => onClosed(), [onClosed]);
+  const close = useCallback(() => closeThroughHistory(), [closeThroughHistory]);
 
   const node = (
     <div
       ref={backdropRef}
       className="k-sheet"
+      data-open={shows ? "true" : "false"}
       style={{
         position: "fixed",
         inset: 0,
@@ -131,6 +164,8 @@ export function SheetWrap({
           left: 0,
           right: 0,
           bottom: 0,
+          maxHeight: "90svh",
+          overflowY: "auto",
           paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
           background: "var(--surface)",
           borderTopLeftRadius: 20,

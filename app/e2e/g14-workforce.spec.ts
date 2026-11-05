@@ -172,7 +172,7 @@ test.describe("G14 — named workforce", () => {
     );
     expect(serious.map((v) => `${v.id} (${v.impact})`)).toEqual([]);
     console.log(`G14 add-person sheet: 0 serious/critical (${axe.violations.length} total)`);
-    await a11ySheet.getByRole("button", { name: "Close" }).click();
+    await a11ySheet.getByRole("button", { name: "Close", exact: true }).click();
 
     // ---- edit a role, remove with Undo ----------------------------------
     await wf.getByRole("tab", { name: /Own crew/ }).click();

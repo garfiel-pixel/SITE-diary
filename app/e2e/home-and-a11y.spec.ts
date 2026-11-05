@@ -7,57 +7,116 @@ import {
   activateDb,
   tableCount,
   openSection,
-  setRecordedBy,
   waitSaved,
   getReports,
-  stubUploadSuccess,
+  waitForSeed,
 } from "./helpers";
 
 type Page = import("@playwright/test").Page;
 
 const HOME_TITLE = "Site diary";
 
-test.describe("Unit 8 — home screen and accessibility", () => {
-  test("8.1 Fresh launch shows the home screen and no editor", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: HOME_TITLE, level: 2 })).toBeVisible();
-    await expect(page.locator('[data-testid="app-header"]')).toBeHidden();
-    await expect(page.locator("#sec-project")).toBeHidden();
-  });
+function fullDate(isoDate: string) {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-JM", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(y!, m! - 1, d!));
+}
 
-  test("8.2 Open the sample from the saved list; back chip is visible without scrolling", async ({
+async function openHome(page: Page) {
+  await activateDb(page);
+  await page.goto("/");
+  await waitForSeed(page);
+  await expect(
+    page.getByRole("heading", { name: HOME_TITLE, level: 2 })
+  ).toBeVisible();
+}
+
+async function setTheme(page: Page, mode: "light" | "dark") {
+  const current = await page.evaluate(() => document.documentElement.dataset.theme);
+  if (current !== mode) {
+    await page.getByTestId("theme-toggle").click();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
+      .toBe(mode);
+  }
+}
+
+async function seriousViolations(page: Page) {
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  return results.violations
+    .filter((v) => v.impact === "serious" || v.impact === "critical")
+    .map((v) => `${v.id} (${v.impact})`);
+}
+
+test.describe("Unit 3 — home screen, back navigation and accessibility", () => {
+  test("3.1 A fresh launch shows the home screen and never auto-opens a report", async ({
     page,
   }) => {
-    await activateDb(page);
-    await page.goto("/");
+    await openHome(page);
 
     await expect(
-      page.getByRole("heading", { name: "All reports", level: 2 })
+      page.getByRole("heading", { name: HOME_TITLE, level: 2 })
     ).toBeVisible();
+    await expect(page.locator("#main")).toBeVisible();
+    await expect(page.locator("#sec-project")).toHaveCount(0);
+    await expect(page.getByText("No report for this date yet")).toHaveCount(0);
+    await expect(page).toHaveTitle("Pave-Con Site Diary");
     await expect(
-      page.getByRole("heading", { name: "← All reports", level: 2 })
+      page.getByRole("button", { name: /New report for today|Open today's report/ })
     ).toBeVisible();
 
-    await page.getByRole("link", { name: /site diary sample/i }).first().click();
-    await expect(
-      page.getByRole("heading", { name: "← All reports", level: 2 })
-    ).toBeVisible();
+    const reports = await getReports(page);
+    expect(reports.some((r) => r.date === TODAY_ISO)).toBe(false);
 
-    await page.getByRole("heading", {
-      name: "← All reports",
-      level: 2,
-    }).click();
     await expect(
-      page.getByRole("heading", { name: "All reports", level: 2 })
-    ).toBeVisible();
+      page.getByRole("heading", { name: HOME_TITLE, level: 2 })
+    ).toBeFocused();
   });
 
-  test("8.3 Browser Back from the editor returns home; reload preserves route", async ({
+  test("3.2 The saved list opens the sample report; the visible back control returns home", async ({
     page,
   }) => {
-    await activateDb(page);
+    await openHome(page);
 
-    await page.goto(`#/report/${TODAY_ISO}`);
+    const row = page.getByTestId(`home-row-${YESTERDAY_ISO}`);
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("Hatfield Road Rehabilitation");
+    await expect(row).toContainText("Chainage 0+400 to 0+900");
+    await expect(row).toContainText("Saved on phone");
+    await expect(row).toContainText("Sample");
+
+    const box = await row.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(56);
+
+    await row.click();
+    await expect(page.locator("#sec-project")).toBeVisible();
+    await expect(page).toHaveTitle(`Site diary — ${fullDate(YESTERDAY_ISO)}`);
+
+    const back = page.getByTestId("all-reports");
+    await expect(back).toBeVisible();
+    const backBox = await back.boundingBox();
+    expect(backBox?.height ?? 0).toBeGreaterThanOrEqual(48);
+    const headerBox = await page.getByTestId("app-header").boundingBox();
+    expect(backBox?.y ?? 0).toBeGreaterThanOrEqual((headerBox?.y ?? 0) + (headerBox?.height ?? 0) - 1);
+    expect(backBox?.y ?? 9999).toBeLessThan(800);
+
+    await back.click();
+    await expect(
+      page.getByRole("heading", { name: HOME_TITLE, level: 2 })
+    ).toBeVisible();
+    await expect(page).toHaveTitle("Pave-Con Site Diary");
+  });
+
+  test("3.3 Browser Back, Forward and reload follow the hash route", async ({ page }) => {
+    await openHome(page);
+
+    await page.getByTestId(`home-row-${YESTERDAY_ISO}`).click();
     await expect(page.locator("#sec-project")).toBeVisible();
 
     await page.goBack();
@@ -65,329 +124,387 @@ test.describe("Unit 8 — home screen and accessibility", () => {
       page.getByRole("heading", { name: HOME_TITLE, level: 2 })
     ).toBeVisible();
 
+    await page.goForward();
+    await expect(page.locator("#sec-project")).toBeVisible();
+    await expect(page).toHaveTitle(`Site diary — ${fullDate(YESTERDAY_ISO)}`);
+
+    await page.goBack();
+    await expect(
+      page.getByRole("heading", { name: HOME_TITLE, level: 2 })
+    ).toBeVisible();
+
+    // A deep link survives refresh, and a plain / still lands on home.
     await page.goto(`#/report/${YESTERDAY_ISO}`);
     await expect(page.locator("#sec-project")).toBeVisible();
     await page.reload();
     await expect(page.locator("#sec-project")).toBeVisible();
+    await expect(page).toHaveTitle(`Site diary — ${fullDate(YESTERDAY_ISO)}`);
 
-    await page.goto("#/");
-    await expect(
-      page.getByRole("heading", { name: HOME_TITLE, level: 2 })
-    ).toBeVisible();
+    await page.goto("/");
     await page.reload();
     await expect(
       page.getByRole("heading", { name: HOME_TITLE, level: 2 })
     ).toBeVisible();
+    await expect(page).toHaveTitle("Pave-Con Site Diary");
   });
 
-  test("8.4 Visiting an empty date adds zero rows; Start a blank report adds one", async ({
+  test("3.4 Visiting an empty date adds no report; Start a blank report adds exactly one", async ({
     page,
   }) => {
-    await activateDb(page);
+    await openHome(page);
 
     const parts = TODAY_ISO.match(/^(\d{4})-(\d{2})-(\d{2})$/)!;
-    const future = iso(
-      new Date(+parts[1], +parts[2] - 1, +parts[3] + 3)
-    );
-    await page.goto(`#/report/${future}`);
-    await expect(page.locator('[data-testid="start-blank"]')).toBeVisible();
-    await expect(page.locator('[data-testid="copy-from-yesterday"]')).toBeHidden();
+    const future = iso(new Date(+parts[1]!, +parts[2]! - 1, +parts[3]! + 4));
 
+    const before = await tableCount(page, "reports");
+    await page.goto(`#/report/${future}`);
+    await expect(
+      page.getByRole("heading", { name: "No report for this date yet", level: 2 })
+    ).toBeVisible();
     await waitSaved(page);
-    const beforeEmpty = await tableCount(page, "reports");
-    await page.goto("/");
-    await waitSaved(page);
-    const afterEmpty = await tableCount(page, "reports");
-    expect(afterEmpty).toBe(beforeEmpty);
+    expect(await tableCount(page, "reports")).toBe(before);
+
+    await page.getByTestId("all-reports").click();
+    await expect(
+      page.getByRole("heading", { name: HOME_TITLE, level: 2 })
+    ).toBeVisible();
+    expect(await tableCount(page, "reports")).toBe(before);
 
     await page.goto(`#/report/${future}`);
     await page.getByTestId("start-blank").click();
     await expect(page.locator("#sec-project")).toBeVisible();
+    await expect(page.locator("#mi-project")).toBeFocused();
     await waitSaved(page);
 
-    const afterBlank = await tableCount(page, "reports");
-    expect(afterBlank).toBe(beforeEmpty + 1);
-
+    expect(await tableCount(page, "reports")).toBe(before + 1);
     const reports = await getReports(page);
-    const newRow = reports.find((r) => (r.date as string) === future);
-    expect(newRow).toBeDefined();
+    expect(reports.filter((r) => r.date === future)).toHaveLength(1);
   });
 
-  test("8.5 When today already has a report, the primary button reads Open today's report", async ({
+  test("3.5 The primary button opens today once and never creates a duplicate", async ({
     page,
   }) => {
-    await activateDb(page);
+    await openHome(page);
 
-    await page.goto("/");
-    await page.getByRole("link", { name: /site diary sample/i }).first().click();
-    await waitSaved(page);
+    const todayReports = async () =>
+      (await getReports(page)).filter((r) => r.date === TODAY_ISO);
 
-    await page.goto("/");
+    expect(await todayReports()).toHaveLength(0);
+    await page.getByRole("button", { name: "New report for today" }).click();
     await expect(
-      page.getByRole("button", { name: /open today's report/i })
+      page.getByRole("heading", { name: "No report for this date yet", level: 2 })
     ).toBeVisible();
-    await page.getByRole("button", { name: /open today's report/i }).click();
+
+    await page.getByTestId("start-blank").click();
+    await expect(page.locator("#sec-project")).toBeVisible();
+    await waitSaved(page);
+    expect(await todayReports()).toHaveLength(1);
+
+    await page.getByTestId("all-reports").click();
+    await expect(
+      page.getByRole("button", { name: "Open today's report" })
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Open today's report" }).click();
     await expect(page.locator("#sec-project")).toBeVisible();
     await waitSaved(page);
 
-    const reports = await getReports(page);
-    const todays = reports.filter(
-      (r) => (r.date as string) === TODAY_ISO
-    );
-    expect(todays.length).toBe(1);
+    expect(await todayReports()).toHaveLength(1);
   });
 
-  test("8.6 For every sheet: Escape closes it, focus returns to the opener, Tab never leaves", async ({
+  test("3.6 Sheets trap focus, close on Escape, and close with browser Back without changing the route", async ({
     page,
   }) => {
     await activateDb(page);
     await page.goto(`#/report/${YESTERDAY_ISO}`);
+    await expect(page.locator("#sec-project")).toBeVisible();
 
-    await page.getByTestId("open-settings").click();
-    await expect(page.locator('.k-sheet[data-open="true"]')).toBeVisible();
+    const hash = () => page.evaluate(() => location.hash);
+    const routeHash = await hash();
+
+    // Escape closes; focus enters the dialog first and returns to the opener.
+    const opener = page.getByTestId("open-settings");
+    await opener.click();
     const sheet = page.locator('.k-sheet[data-open="true"]');
-    const opener = page.locator('[data-testid="open-settings"]');
-
-    const focusableInside = sheet.locator(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("dialog")).toBeVisible();
+    await expect(
+      sheet.getByRole("button", { name: "Close Settings" })
+    ).toBeVisible();
+    const inside = await page.evaluate(
+      () => !!document.activeElement?.closest('[role="dialog"]')
     );
-    await expect(focusableInside.first()).toBeFocused();
+    expect(inside).toBe(true);
+
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press("Tab");
+      expect(
+        await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))
+      ).toBe(true);
+      await page.keyboard.press("Shift+Tab");
+      expect(
+        await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))
+      ).toBe(true);
+    }
 
     await page.keyboard.press("Escape");
     await expect(sheet).toBeHidden({ timeout: 5_000 });
     await expect(opener).toBeFocused({ timeout: 2_000 });
+    expect(await hash()).toBe(routeHash);
 
-    await page.getByTestId("open-settings").click();
+    // Android/browser Back closes a sheet through history, not the router.
+    await opener.click();
     await expect(sheet).toBeVisible();
-    let trapped = 0;
-    for (let i = 0; i < 6; i++) {
-      await page.keyboard.press("Tab");
-      if (await focusableInside.first().evaluate((el) => el === document.activeElement)) trapped++;
-      await page.keyboard.press("Shift+Tab");
-      if (await focusableInside.first().evaluate((el) => el === document.activeElement)) trapped++;
-    }
-    expect(trapped).toBeGreaterThan(0);
-
-    await page.locator('.k-sheet[data-open="true"]').click({ position: { x: 4, y: 4 } });
+    await page.goBack();
     await expect(sheet).toBeHidden({ timeout: 5_000 });
+    expect(await hash()).toBe(routeHash);
+    await expect(page.locator("#sec-project")).toBeVisible();
+    await expect(opener).toBeFocused({ timeout: 2_000 });
+
+    // An editor sheet behaves the same way.
+    await openSection(page, "sec-workforce");
+    const addPerson = page.getByTestId("add-person");
+    await addPerson.click();
+    const personSheet = page.locator('.k-sheet[data-open="true"]');
+    await expect(personSheet).toBeVisible();
+    await page.goBack();
+    await expect(personSheet).toBeHidden({ timeout: 5_000 });
+    expect(await hash()).toBe(routeHash);
+    await expect(page.locator("#sec-project")).toBeVisible();
   });
 
-  test("8.7 axe reports zero serious/critical violations across required screens", async ({
+  test("3.7 axe reports zero serious or critical violations on the required screens", async ({
     page,
   }) => {
     test.setTimeout(400_000);
-
-    await page.goto("/");
+    await openHome(page);
     await page.emulateMedia({ colorScheme: "light" });
-    for (const label of [
-      "home (light)",
-      "editor (light)",
-      "new-day (light)",
-      "settings (light)",
-    ]) {
-      if (label === "editor (light)" || label === "new-day (light)") {
-        await page.getByRole("link", { name: /site diary sample/i })
-          .first()
-          .click();
-        await waitSaved(page);
-      }
-      if (label === "settings (light)") {
-        await page.getByTestId("open-settings").click();
-      }
-      if (label === "new-day (light)") {
-        await page.getByTestId("start-blank").click();
-      }
 
-      const results = await new AxeBuilder({ page })
-        .withTags([
-          "wcag2a",
-          "wcag2aa",
-          "wcag21a",
-          "wcag21aa",
-          "wcag22aa",
-        ])
-        .analyze();
-      const serious = results.violations.filter(
-        (v) => v.impact === "serious" || v.impact === "critical"
-      );
-      expect(
-        serious.map((v) => `${v.id} (${v.impact})`),
-        `${label}: serious/critical axe violations`
-      ).toEqual([]);
-      console.log(`8.7 ${label}: 0 serious/critical (${results.violations.length} total)`);
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await setTheme(page, theme);
 
-      if (label === "new-day (light)") {
-        await page.locator('.k-sheet[data-open="true"]').click({
-          position: { x: 4, y: 4 },
-        });
-      }
-      if (label === "settings (light)") {
-        await page.locator('.k-sheet[data-open="true"]').click({
-          position: { x: 4, y: 4 },
-        });
-      }
-    }
+      expect(await seriousViolations(page), `home (${theme})`).toEqual([]);
 
-    await page.emulateMedia({ colorScheme: "dark" });
-    for (const label of [
-      "home (dark)",
-      "editor (dark)",
-      "new-day (dark)",
-      "settings (dark)",
-    ]) {
-      if (label === "editor (dark)" || label === "new-day (dark)") {
-        await page.getByRole("link", { name: /site diary sample/i })
-          .first()
-          .click();
-        await waitSaved(page);
-      }
-      if (label === "settings (dark)") {
-        await page.getByTestId("open-settings").click();
-      }
-      if (label === "new-day (dark)") {
-        await page.getByTestId("start-blank").click();
-      }
+      await page.getByTestId(`home-row-${YESTERDAY_ISO}`).click();
+      await expect(page.locator("#sec-project")).toBeVisible();
+      expect(await seriousViolations(page), `editor (${theme})`).toEqual([]);
 
-      const results = await new AxeBuilder({ page })
-        .withTags([
-          "wcag2a",
-          "wcag2aa",
-          "wcag21a",
-          "wcag21aa",
-          "wcag22aa",
-        ])
-        .analyze();
-      const serious = results.violations.filter(
-        (v) => v.impact === "serious" || v.impact === "critical"
-      );
-      expect(
-        serious.map((v) => `${v.id} (${v.impact})`),
-        `${label}: serious/critical axe violations`
-      ).toEqual([]);
-      console.log(`8.7 ${label}: 0 serious/critical (${results.violations.length} total)`);
+      await page.getByTestId("all-reports").click();
+      await page.getByTestId("home-new-today").click();
+      await expect(
+        page.getByRole("heading", { name: "No report for this date yet", level: 2 })
+      ).toBeVisible();
+      expect(await seriousViolations(page), `new-day (${theme})`).toEqual([]);
 
-      if (label === "new-day (dark)") {
-        await page.locator('.k-sheet[data-open="true"]').click({
-          position: { x: 4, y: 4 },
-        });
-      }
-      if (label === "settings (dark)") {
-        await page.locator('.k-sheet[data-open="true"]').click({
-          position: { x: 4, y: 4 },
-        });
-      }
+      await page.getByTestId("open-settings").click();
+      const sheet = page.locator('.k-sheet[data-open="true"]');
+      await expect(sheet).toBeVisible();
+      expect(await seriousViolations(page), `settings (${theme})`).toEqual([]);
+      await sheet.getByRole("button", { name: "Close Settings" }).click();
+      await expect(sheet).toBeHidden();
+
+      await page.getByTestId("all-reports").click();
+      await expect(
+        page.getByRole("heading", { name: HOME_TITLE, level: 2 })
+      ).toBeVisible();
     }
   });
 
-  test("8.8 No visible text has a computed font-size below 12px", async ({ page }) => {
-    test.setTimeout(400_000);
+  test("3.8 Visible text is at least 12px and every interactive target is at least 48px", async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
 
-    async function assertNoSmallText(page: Page, label: string) {
+    const assertText = async (label: string) => {
       const small = await page.evaluate(() => {
-        const out: Array<{ text: string; size: number; el: string }> = [];
+        const out: Array<{ text: string; size: number; tag: string }> = [];
         document.querySelectorAll("*").forEach((node) => {
           if (!(node instanceof HTMLElement)) return;
           if (node.closest(".sr-only")) return;
+          const rect = node.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) return;
           const style = getComputedStyle(node);
+          if (style.visibility === "hidden" || style.display === "none") return;
           const size = parseFloat(style.fontSize);
           if (size > 0 && size < 12) {
             const text = node.textContent?.trim().slice(0, 80) ?? "";
-            if (text) {
-              out.push({ text, size, el: node.tagName.toLowerCase() });
-            }
+            if (text) out.push({ text, size, tag: node.tagName.toLowerCase() });
           }
         });
         return out;
       });
-      expect(
-        small,
-        `${label}: text elements with computed font-size below 12px`
-      ).toEqual([]);
-    }
+      expect(small, `${label}: visible text under 12px`).toEqual([]);
+    };
 
-    await page.goto("/");
-    await assertNoSmallText(page, "home");
+    const assertTargets = async (label: string) => {
+      const small = await page.evaluate(() => {
+        const out: Array<{ label: string; w: number; h: number; tag: string }> = [];
+        const selector =
+          'button, a[href], input, select, textarea, [role="radio"], [role="tab"], [role="button"]';
+        document.querySelectorAll<HTMLElement>(selector).forEach((el) => {
+          if (el.closest(".sr-only")) return;
+          if (el.classList.contains("skip-link")) return;
+          const rect = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          if (rect.width === 0 || rect.height === 0) return;
+          if (style.visibility === "hidden" || style.display === "none") return;
+          if (el.closest('[aria-hidden="true"]')) return;
+          if (rect.width < 48 || rect.height < 48) {
+            out.push({
+              label:
+                el.getAttribute("aria-label") ||
+                el.textContent?.trim().slice(0, 40) ||
+                el.className ||
+                el.tagName,
+              w: Math.round(rect.width),
+              h: Math.round(rect.height),
+              tag: el.tagName.toLowerCase(),
+            });
+          }
+        });
+        return out;
+      });
+      expect(small, `${label}: interactive targets under 48×48`).toEqual([]);
+    };
 
-    await page.getByRole("link", { name: /site diary sample/i }).first().click();
-    await waitSaved(page);
-    await assertNoSmallText(page, "editor");
+    await openHome(page);
+    await assertText("home");
+    await assertTargets("home");
 
-    await page.getByTestId("start-blank").click();
-    await assertNoSmallText(page, "new-day");
+    await page.getByTestId(`home-row-${YESTERDAY_ISO}`).click();
+    await expect(page.locator("#sec-project")).toBeVisible();
+    await assertText("editor");
+    await assertTargets("editor");
+
+    await page.getByTestId("all-reports").click();
+    await page.getByTestId("home-new-today").click();
+    await expect(
+      page.getByRole("heading", { name: "No report for this date yet", level: 2 })
+    ).toBeVisible();
+    await assertText("new-day");
+    await assertTargets("new-day");
 
     await page.getByTestId("open-settings").click();
-    await assertNoSmallText(page, "settings");
+    const sheet = page.locator('.k-sheet[data-open="true"]');
+    await expect(sheet).toBeVisible();
+    await assertText("settings");
+    await assertTargets("settings");
   });
 
-  test("8.9 Delete sample report removes it and Undo restores it", async ({ page }) => {
-    await activateDb(page);
-    await page.goto(`#/report/${YESTERDAY_ISO}`);
-
-    await expect(page.getByTestId("delete-sample")).toBeVisible();
-    const sampleName = await page
-      .locator('[data-testid="delete-sample"]')
-      .getAttribute("aria-label");
-    expect(sampleName).toContain("sample");
-
-    await page.getByTestId("delete-sample").click();
-    await expect(page.getByRole("heading", { name: HOME_TITLE, level: 2 })).toBeVisible();
-
-    const reports = await getReports(page);
-    const sample = reports.find(
-      (r) =>
-        (r.date as string) === YESTERDAY_ISO &&
-        (r.isSample as boolean) === true
-    );
-    expect(sample).toBeUndefined();
-
-    await page.getByTestId("undo-snackbar").waitFor({ state: "attached" });
-    await page.getByRole("button", { name: "Undo" }).click();
-    await waitSaved(page);
-
-    const after = await getReports(page);
-    const restored = after.find(
-      (r) =>
-        (r.date as string) === YESTERDAY_ISO &&
-        (r.isSample as boolean) === true
-    );
-    expect(restored).toBeDefined();
-  });
-
-  test("8.10 A simulated db.reports.put failure shows the role=alert Not saved message", async ({
+  test("3.9 Delete sample report and Undo restore it, even after the snackbar sits for a long time", async ({
     page,
   }) => {
-    test.setTimeout(200_000);
-    await stubUploadSuccess(page);
     await activateDb(page);
     await page.goto(`#/report/${YESTERDAY_ISO}`);
+    await expect(page.getByTestId("delete-sample")).toBeVisible();
 
-    await page.addInitScript(() => {
-      const orig = (IDBObjectStore.prototype as any).put;
-      (IDBObjectStore.prototype as any).put = function (this: IDBObjectStore, mode: IDBTransactionMode, transaction: IDBTransaction) {
-        if (transaction.objectStoreNames.contains("reports")) {
-          const err = new DOMException("mock put failure", "AbortError");
-          setTimeout(() => {
-            const ev = new Event("error", { bubbles: true });
-            (transaction as any).error = err;
-            transaction.dispatchEvent(ev);
-          }, 0);
-          return;
+    await page.getByTestId("delete-sample").click();
+    await expect(
+      page.getByRole("heading", { name: HOME_TITLE, level: 2 })
+    ).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        const reports = await getReports(page);
+        return reports.some(
+          (r) => r.date === YESTERDAY_ISO && r.isSample === true
+        );
+      })
+      .toBe(false);
+
+    const snackbar = page.getByTestId("undo-snackbar");
+    await expect(snackbar).toBeVisible();
+    await expect(snackbar).toContainText("Sample report deleted");
+
+    // No auto-dismiss: still there well after the old six-second timeout.
+    await page.waitForTimeout(7_000);
+    await expect(snackbar).toBeVisible();
+
+    await snackbar
+      .getByRole("button", { name: "Undo last change" })
+      .click();
+    await expect(snackbar).toBeHidden();
+
+    await expect
+      .poll(async () => {
+        const reports = await getReports(page);
+        return reports.some(
+          (r) => r.date === YESTERDAY_ISO && r.isSample === true
+        );
+      })
+      .toBe(true);
+    await expect(page.getByTestId(`home-row-${YESTERDAY_ISO}`)).toContainText(
+      "Sample"
+    );
+  });
+
+  test("3.10 A failed autosave keeps the old data and shows the exact persistent alert", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await activateDb(page);
+    await page.goto(`#/report/${YESTERDAY_ISO}`);
+    await expect(page.locator("#sec-project")).toBeVisible();
+
+    const original = await getReports(page);
+    const originalProject = original.find((r) => r.date === YESTERDAY_ISO)
+      ?.project;
+    expect(originalProject).toBe("Hatfield Road Rehabilitation");
+
+    await page.evaluate(() => {
+      const proto = IDBObjectStore.prototype as unknown as {
+        put: (value: unknown, key?: IDBValidKey) => IDBRequest;
+      };
+      (window as unknown as { __origPut: typeof proto.put }).__origPut =
+        proto.put;
+      proto.put = function (value: unknown, key?: IDBValidKey) {
+        if ((this as IDBObjectStore).name === "reports") {
+          throw new DOMException("mock put failure", "AbortError");
         }
-        return orig.call(this, mode, transaction);
-      } as any;
+        return (
+          window as unknown as { __origPut: typeof proto.put }
+        ).__origPut.call(this, value, key);
+      };
     });
 
-    await page.locator("#sec-project > h2 > button").click();
-    const projectInput = page.locator('[data-testid="mi-project"]');
-    await projectInput.fill("Edited project name");
-    await projectInput.blur();
-    await waitSaved(page);
+    const project = page.locator("#mi-project");
+    await project.fill("Edited project name");
+    await project.blur();
 
-    await expect(
-      page.getByRole("alert").filter({ hasText: /not saved/i })
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByTestId("persist-failure")
-    ).toBeVisible({ timeout: 5_000 });
+    const alert = page.getByTestId("persist-failure");
+    await expect(alert).toBeVisible({ timeout: 10_000 });
+    await expect(alert).toHaveAttribute("role", "alert");
+    await expect(alert).toHaveText(
+      "Not saved — storage problem. Export the PDF now to keep your work."
+    );
+
+    await page.waitForTimeout(5_000);
+    await expect(alert).toBeVisible();
+
+    // The write failed, so the previously saved report is untouched.
+    const afterFailure = await getReports(page);
+    expect(
+      afterFailure.find((r) => r.date === YESTERDAY_ISO)?.project
+    ).toBe(originalProject);
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem("site-diary-persist-failure")
+      )
+    ).toBeTruthy();
+
+    await page.evaluate(() => {
+      (
+        IDBObjectStore.prototype as unknown as { put: unknown }
+      ).put = (window as unknown as { __origPut: unknown }).__origPut;
+    });
+    await project.fill("Recovered project name");
+    await project.blur();
+    await expect(alert).toBeHidden({ timeout: 10_000 });
+    await expect
+      .poll(async () => {
+        const reports = await getReports(page);
+        return reports.find((r) => r.date === YESTERDAY_ISO)?.project;
+      })
+      .toBe("Recovered project name");
   });
 });
