@@ -24,7 +24,7 @@ export function UndoSnackbar({ undo }: { undo: UndoMsg | null }) {
         type="button"
         className="font-display text-lg"
         aria-label="Undo last change"
-        style={{ color: "var(--accent)", minHeight: 48, minWidth: 48 }}
+        style={{ color: "var(--accent)", minHeight: 56, minWidth: 56 }}
         onClick={undo.fn}
       >
         Undo
@@ -33,7 +33,7 @@ export function UndoSnackbar({ undo }: { undo: UndoMsg | null }) {
         type="button"
         className="font-display text-lg"
         aria-label="Dismiss this message"
-        style={{ color: "var(--on-band)", minHeight: 48, minWidth: 48 }}
+        style={{ color: "var(--on-band)", minHeight: 56, minWidth: 56 }}
         onClick={clearUndo}
       >
         Dismiss

@@ -34,6 +34,7 @@ import {
 import { ToolboxSection } from "./ToolboxSection";
 import { WorkforceSection } from "./WorkforceSection";
 import { PhotoSection } from "./PhotoSection";
+import { SmartSiteInput } from "./SmartSiteInput";
 import { showUndo, clearUndo } from "../components/undo";
 import { tick } from "../lib/haptics";
 import { SheetWrap } from "../components/SheetWrap";
@@ -124,7 +125,6 @@ function ReportBar({ date, onBack }: { date: string; onBack: () => void }) {
           background: "var(--surface)",
           color: "var(--text)",
           borderColor: "var(--rule)",
-          minHeight: 48,
         }}
         onClick={onBack}
       >
@@ -485,6 +485,7 @@ export function DiaryScreen({
   const [pdfSheet, setPdfSheet] = useState<{ name: string; bytes: number; pages: number } | null>(null);
   const [recordedError, setRecordedError] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfWarning, setPdfWarning] = useState<string[] | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState("");
 
@@ -501,6 +502,7 @@ export function DiaryScreen({
   const [carryWip, setCarryWip] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [otherSheet, setOtherSheet] = useState<null | "equipment" | "material" | "visitor">(null);
+  const [jumpOpen, setJumpOpen] = useState(false);
   const savedTimer = useRef<number | undefined>(undefined);
   const deletingRef = useRef(false);
 
@@ -681,9 +683,18 @@ export function DiaryScreen({
     setOpen((o) => ({ ...o, "sec-project": true }));
     tick();
     const copiedId = blank.id;
+    const peopleCount = blank.workforce.a.length + blank.workforce.b.length;
+    const equipCount = blank.equipment.length;
+    const parts = [
+      "project",
+      "site",
+      peopleCount ? `${peopleCount} ${peopleCount === 1 ? "person" : "people"}` : "",
+      equipCount ? `${equipCount} ${equipCount === 1 ? "equipment" : "equipment"}` : "",
+      carryWip && blank.wip.trim() ? "work in progress" : "",
+    ].filter(Boolean);
     showUndo({
       key: Date.now(),
-      msg: "Copied from yesterday",
+      msg: `Copied ${parts.join(", ")} from yesterday`,
       fn: () => {
         void db.reports.delete(copiedId);
         clearUndo();
@@ -956,23 +967,34 @@ export function DiaryScreen({
   const isDone = (key: keyof typeof sectionProgress) => sectionProgress[key] === 1;
   const scrollTo = (id: string) => {
     setOpen((o) => ({ ...o, [id]: true }));
-    requestAnimationFrame(() => {
+    window.setTimeout(() => {
       const el = document.getElementById(id);
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-      el?.classList.remove("pulse-target");
-      requestAnimationFrame(() => el?.classList.add("pulse-target"));
-    });
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.remove("pulse-target");
+      window.setTimeout(() => el.classList.add("pulse-target"), 60);
+    }, 80);
   };
 
-  /* ---- create PDF ---- */
-  const createPdf = async () => {
-    if (!r?.recordedBy.trim()) {
-      setRecordedError(true);
-      scrollTo("sec-recorded");
-      return;
+  /* ---- audit-aware PDF creation ---- */
+  const missingCriticalSections = useCallback((): { id: string; label: string }[] => {
+    if (!r) return [];
+    const missing: { id: string; label: string }[] = [];
+    if (!r.project.trim()) missing.push({ id: "sec-project", label: "Project" });
+    if (!r.site.trim()) missing.push({ id: "sec-project", label: "Site" });
+    if (!r.weather.am || !r.weather.pm) missing.push({ id: "sec-weather", label: "Weather" });
+    if (r.workforce.a.length + r.workforce.b.length === 0) {
+      missing.push({ id: "sec-workforce", label: "Workforce" });
     }
+    if (!r.wip.trim()) missing.push({ id: "sec-wip", label: "Work in progress" });
+    return missing;
+  }, [r]);
+
+  const doCreatePdf = async () => {
+    if (!r) return;
     setRecordedError(false);
     setPdfError(null);
+    setPdfWarning(null);
     setBuilding(true);
     try {
       // Lazy-load pdfmake + embedded fonts so first paint stays small.
@@ -1009,6 +1031,22 @@ export function DiaryScreen({
     } finally {
       setBuilding(false);
     }
+  };
+
+  const createPdf = () => {
+    if (!r?.recordedBy.trim()) {
+      setRecordedError(true);
+      scrollTo("sec-recorded");
+      return;
+    }
+    setRecordedError(false);
+    const missing = missingCriticalSections();
+    if (missing.length > 0 && !pdfWarning) {
+      setPdfWarning(missing.map((m) => m.label));
+      scrollTo(missing[0]!.id);
+      return;
+    }
+    void doCreatePdf();
   };
   const pdfBlobRef = useRef<Blob | null>(null);
 
@@ -1202,11 +1240,16 @@ export function DiaryScreen({
       <div
         className="summary-strip sticky z-30"
         style={{ top: "calc(var(--header-h, 96px) + 56px)" }}
-
         data-testid="summary-strip"
       >
-        <div className="px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold">
-          <SummaryNum label="People" value={summary.people} />
+        <div className="px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="metric whitespace-nowrap inline-flex items-center gap-2">
+            People <b className="num"><span key={summary.people} className="roll">{summary.people}</span></b>
+            <span className="badge-named" data-testid="named-count">{summary.named} Named</span>
+            {summary.unnamed > 0 && (
+              <span className="badge-named" data-testid="unnamed-count">{summary.unnamed} Unnamed</span>
+            )}
+          </span>
           <SummaryNum label="Equipment" value={summary.hours} hrs />
           <SummaryNum label="Deliveries" value={summary.deliveries} />
           <SummaryNum label="Time lost" value={summary.lost} hrs />
@@ -1244,8 +1287,6 @@ export function DiaryScreen({
             type="button"
             data-testid="delete-sample"
             style={{
-              minHeight: 48,
-              minWidth: 48,
               borderRadius: 12,
               background: "var(--surface)",
               color: "var(--text)",
@@ -1279,13 +1320,16 @@ export function DiaryScreen({
               suggestions={ranked(projMemo)}
               onChange={(v) => update({ project: v })}
             />
-            <MemoInput
-              kind="site"
-              label="Site"
-              value={r.site}
-              suggestions={ranked(siteMemo)}
-              onChange={(v) => update({ site: v })}
-            />
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
+                Site
+              </span>
+              <SmartSiteInput
+                value={r.site}
+                suggestions={ranked(siteMemo)}
+                onChange={(v) => update({ site: v })}
+              />
+            </div>
             <p className="text-sm" style={{ color: "var(--muted)" }}>
               Day: <b style={{ color: "var(--text)" }}>{fmtDay(date)}</b> (from the date)
             </p>
@@ -1409,7 +1453,7 @@ export function DiaryScreen({
                   <button
                     type="button"
                     aria-label={`Remove ${m.name}`}
-                    className="btn-56 !min-h-12 !min-w-12"
+                    className="btn-56"
                     onClick={() => withTransition(() => deleteRow("materials", m.id))}
                   >
                     <Icon name="trash" size={18} />
@@ -1628,6 +1672,15 @@ export function DiaryScreen({
         }}
       >
         <div className="max-w-3xl mx-auto flex flex-col gap-2">
+          <button
+            type="button"
+            className="chip w-full justify-center"
+            data-testid="jump-to-section"
+            onClick={() => setJumpOpen(true)}
+          >
+            <Icon name="list" size={16} />
+            Jump to section
+          </button>
           <div className="flex flex-wrap gap-2">
             <StatusChip
               done={complete.weather}
@@ -1672,6 +1725,105 @@ export function DiaryScreen({
           </button>
         </div>
       </div>
+
+      {/* ===== PDF warning sheet ===== */}
+      <SheetWrap
+        opened={pdfWarning !== null}
+        onClosed={() => setPdfWarning(null)}
+        label="Report incomplete"
+      >
+        {pdfWarning !== null && (
+          <>
+            <span className="inline-flex items-center gap-2 mb-2 text-sm font-semibold" data-testid="pdf-warning">
+              <Icon name="warning" size={18} /> Some sections are empty
+            </span>
+            <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
+              This PDF will be created without: {" "}
+              <b style={{ color: "var(--text)" }}>{pdfWarning.join(", ")}</b>.
+            </p>
+            <button
+              type="button"
+              className="w-full font-display text-xl mb-2"
+              style={{
+                minHeight: 56,
+                borderRadius: 14,
+                background: "var(--accent)",
+                color: "var(--on-accent)",
+                border: 0,
+              }}
+              data-testid="pdf-warning-create"
+              onClick={() => void doCreatePdf()}
+            >
+              Create PDF anyway
+            </button>
+            <button
+              type="button"
+              className="chip w-full justify-center"
+              data-testid="pdf-warning-review"
+              onClick={() => {
+                const missing = missingCriticalSections();
+                if (missing[0]) scrollTo(missing[0].id);
+                setPdfWarning(null);
+              }}
+            >
+              Review missing sections
+            </button>
+          </>
+        )}
+      </SheetWrap>
+
+      {/* ===== Jump to section sheet ===== */}
+      <SheetWrap opened={jumpOpen} onClosed={() => setJumpOpen(false)} label="Jump to section">
+        {jumpOpen && (
+          <div className="flex flex-col gap-1">
+            {[
+              { id: "sec-project", label: "Project / Date", done: isDone("project") },
+              { id: "sec-weather", label: "Weather", done: complete.weather },
+              { id: "sec-lost", label: "Time lost", done: isDone("lost") },
+              { id: "sec-equipment", label: "Equipment", done: isDone("equipment") },
+              { id: "sec-materials", label: "Materials", done: isDone("materials") },
+              { id: "sec-workforce", label: "Workforce", done: complete.workforce },
+              { id: "sec-wip", label: "Work in progress", done: complete.wip },
+              { id: "sec-visitors", label: "Visitors", done: isDone("visitors") },
+              { id: "sec-instructions", label: "Instructions", done: isDone("instructions") },
+              { id: "sec-toolbox", label: "Toolbox talk", done: isDone("toolbox") },
+              { id: "sec-photos", label: "Photos", done: isDone("photos") },
+              { id: "sec-recorded", label: "Recorded by", done: complete.recorded },
+            ].map((sec) => (
+              <button
+                key={sec.id}
+                type="button"
+                className="btn-56 w-full px-4 text-left justify-between"
+                onClick={() => {
+                  setJumpOpen(false);
+                  scrollTo(sec.id);
+                }}
+              >
+                <span>{sec.label}</span>
+                <span className="inline-flex items-center gap-2">
+                  {activeSection === sec.id && (
+                    <span className="text-xs" style={{ color: "var(--muted)" }}>Current</span>
+                  )}
+                  {sec.done ? (
+                    <Icon name="check" size={16} />
+                  ) : (
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 999,
+                        border: "2px solid currentColor",
+                        display: "inline-block",
+                      }}
+                    />
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </SheetWrap>
 
       {/* ===== PDF result sheet ===== */}
       <SheetWrap opened={!!pdfSheet} onClosed={() => setPdfSheet(null)} label="Report ready">
@@ -1774,7 +1926,7 @@ const EquipmentRowView = memo(function EquipmentRowView({
         <button
           type="button"
           aria-label={`Remove ${row.name}`}
-          className="btn-56 !min-h-12 !min-w-12"
+          className="btn-56"
           onClick={() => onDelete(row.id)}
         >
           <Icon name="trash" size={18} />
@@ -1835,7 +1987,7 @@ function StatusChip({
       }}
       data-active={active ? "true" : "false"}
       aria-label={`${label}: ${done ? "complete" : "not yet"} — jump to section`}
-      className="chip !min-h-12 shrink-0"
+      className="chip shrink-0"
       style={{ fontSize: 13 }}
     >
       {done ? (

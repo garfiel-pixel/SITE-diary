@@ -222,8 +222,6 @@ function MainShell({
             background: "transparent",
             color: "var(--on-band)",
             borderColor: "#4a4a4a",
-            minWidth: 48,
-            minHeight: 48,
           }}
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} size={20} />
@@ -238,8 +236,6 @@ function MainShell({
             background: "transparent",
             color: "var(--on-band)",
             borderColor: "#4a4a4a",
-            minWidth: 48,
-            minHeight: 48,
           }}
         >
           <Icon name="gear" size={20} />

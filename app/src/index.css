@@ -160,8 +160,8 @@ button:disabled {
 }
 
 .btn-56 {
-  min-height: 48px;
-  min-width: 48px;
+  min-height: 56px;
+  min-width: 56px;
   border-radius: 14px;
   border: 1.5px solid var(--rule);
   background: var(--surface);
@@ -180,7 +180,7 @@ button:disabled {
 
 .chip {
   position: relative;
-  min-height: 48px;
+  min-height: 56px;
   padding: 0 14px;
   border: 1.5px solid var(--rule);
   border-radius: 999px;
@@ -862,6 +862,25 @@ button:disabled {
 .summary-strip {
   background: var(--accent);
   color: var(--on-accent);
+  border-bottom: 2px solid var(--ink);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+.summary-strip .metric {
+  font-size: 16px;
+  font-weight: 600;
+}
+.summary-strip .metric b {
+  font-weight: 700;
+}
+.summary-strip .badge-named {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--accent);
 }
 
 .ribbon-sample {

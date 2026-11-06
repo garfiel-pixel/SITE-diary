@@ -54,7 +54,7 @@ export function Home() {
       </button>
 
       <fieldset
-        className="min-h-[48px] mb-5"
+        className="min-h-[56px] mb-5"
         style={{
           border: "1px solid var(--rule)",
           borderRadius: 12,
@@ -72,7 +72,7 @@ export function Home() {
             <input
               id="home-other-date"
               type="date"
-              className="min-h-[48px] w-44 max-w-full"
+              className="min-h-[56px] w-44 max-w-full"
               value={otherDate}
               onChange={(e) => setOtherDate(e.target.value)}
               aria-label="Choose a date"
@@ -80,7 +80,7 @@ export function Home() {
           </div>
           <button
             type="button"
-            className="chip min-h-[48px]"
+            className="chip min-h-[56px]"
             data-testid="home-open-other"
             style={{ flex: "0 0 auto" }}
             onClick={() => {

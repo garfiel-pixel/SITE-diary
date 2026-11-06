@@ -180,8 +180,8 @@ export function SheetWrap({
           className="close-chip"
           style={{
             marginBottom: 8,
-            minHeight: 48,
-            minWidth: 48,
+            minHeight: 56,
+            minWidth: 56,
             borderRadius: 12,
             background: "var(--surface)",
             color: "var(--text)",

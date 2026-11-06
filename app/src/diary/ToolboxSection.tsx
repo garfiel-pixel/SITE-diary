@@ -165,7 +165,7 @@ export function ToolboxSection({
           </span>
           <button
             type="button"
-            className="chip !min-h-12"
+            className="chip"
             onClick={() => toggleAll(true)}
             disabled={people.length === 0}
           >
@@ -173,7 +173,7 @@ export function ToolboxSection({
           </button>
           <button
             type="button"
-            className="chip !min-h-12"
+            className="chip"
             onClick={() => toggleAll(false)}
           >
             None

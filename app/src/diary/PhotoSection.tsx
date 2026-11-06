@@ -8,6 +8,7 @@ import { SheetWrap } from "../components/SheetWrap";
 import { shrinkPhoto } from "../lib/photo";
 import { tick } from "../lib/haptics";
 import { withTransition } from "../lib/vt";
+import { PhotoCarousel } from "./PhotoCarousel";
 
 const DESC_CHIPS = ["Before", "After", "Progress", "Defect", "Delivery", "Safety", "Damage"];
 
@@ -24,6 +25,10 @@ export function PhotoSection({ reportId }: { reportId: string }) {
   const [bundleSheet, setBundleSheet] = useState(false);
   const [bundleText, setBundleText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [carousel, setCarousel] = useState<{ open: boolean; index: number }>({
+    open: false,
+    index: 0,
+  });
   const urls = useRef<string[]>([]);
 
   const track = (u: string) => {
@@ -211,6 +216,10 @@ export function PhotoSection({ reportId }: { reportId: string }) {
             }}
             onDelete={() => void delWithUndo(p.id)}
             onDesc={(d) => void pickDesc(p.id, d)}
+            onOpen={() => {
+              const idx = all.findIndex((x) => x.id === p.id);
+              setCarousel({ open: true, index: idx >= 0 ? idx : 0 });
+            }}
           />
         ))}
         {all.length === 0 && !busy && (
@@ -263,6 +272,14 @@ export function PhotoSection({ reportId }: { reportId: string }) {
           Apply
         </button>
       </SheetWrap>
+
+      {carousel.open && (
+        <PhotoCarousel
+          photos={all}
+          startIndex={carousel.index}
+          onClosed={() => setCarousel({ open: false, index: 0 })}
+        />
+      )}
     </div>
   );
 }
@@ -274,6 +291,7 @@ function PhotoCard({
   onToggleSelect,
   onDelete,
   onDesc,
+  onOpen,
 }: {
   photo: PhotoRow;
   selectMode: boolean;
@@ -281,6 +299,7 @@ function PhotoCard({
   onToggleSelect: () => void;
   onDelete: () => void;
   onDesc: (d: string) => void;
+  onOpen: () => void;
 }) {
   const url = useObjectUrl(photo.blob);
   return (
@@ -299,13 +318,21 @@ function PhotoCard({
           </button>
         ) : (
           url && (
-            <img
-              src={url}
-              width={96}
-              height={68}
-              alt={photo.description || "Site photo"}
-              style={{ objectFit: "cover", borderRadius: 10 }}
-            />
+            <button
+              type="button"
+              onClick={onOpen}
+              className="p-0 overflow-hidden"
+              style={{ borderRadius: 10, border: "none", background: "transparent" }}
+              aria-label={photo.description ? `Open photo: ${photo.description}` : "Open photo"}
+            >
+              <img
+                src={url}
+                width={96}
+                height={68}
+                alt={photo.description || "Site photo"}
+                style={{ objectFit: "cover", display: "block" }}
+              />
+            </button>
           )
         )}
         <div className="flex-1 flex flex-col gap-2">
@@ -314,7 +341,7 @@ function PhotoCard({
             type="text"
             defaultValue={photo.description}
             onBlur={(e) => onDesc(e.target.value)}
-            className="btn-56 !min-h-12 w-full px-3 text-left text-sm"
+            className="btn-56 w-full px-3 text-left text-sm"
             aria-label="Photo description"
             placeholder="Description…"
           />
@@ -323,7 +350,7 @@ function PhotoCard({
               <button
                 key={c}
                 type="button"
-                className="chip !min-h-12 text-xs"
+                className="chip text-xs"
                 onClick={() => onDesc(c)}
                 aria-label={`Describe photo as ${c}`}
               >
@@ -335,7 +362,7 @@ function PhotoCard({
         <button
           type="button"
           aria-label="Remove photo"
-          className="btn-56 !min-h-12 !min-w-12 self-start"
+          className="btn-56 self-start"
           onClick={onDelete}
         >
           <Icon name="trash" size={18} />
