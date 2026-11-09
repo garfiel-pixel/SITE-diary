@@ -4,6 +4,7 @@ import {
   completeRequiredSections,
   copyFromYesterday,
   getReportForDate,
+  revealReportActions,
   setRecordedBy,
   stubUploadSuccess,
   TODAY_ISO,
@@ -39,6 +40,7 @@ test.describe("G6 — offline PWA + mock upload", () => {
     await context.setOffline(true);
     console.log("G6 offline: context.setOffline(true)");
 
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     await expect(page.getByTestId("pdf-state")).toBeVisible({ timeout: 120_000 });
     await expect(page.getByTestId("sync-state")).toContainText("Saved on phone");

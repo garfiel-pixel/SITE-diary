@@ -1069,6 +1069,20 @@ export function DiaryScreen({
     return () => io.disconnect();
   }, [mode, r?.id]);
 
+  /* The bottom actions wait for the end of the report, so the bar never covers
+     a section while it is being filled in. */
+  const endRef = useRef<HTMLDivElement | null>(null);
+  const [atEnd, setAtEnd] = useState(false);
+  useEffect(() => {
+    const el = endRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setAtEnd(!!entry?.isIntersecting), {
+      rootMargin: "0px 0px -8px 0px",
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [mode, r?.id]);
+
   /* photos + rows publish undo actions on a custom event */
   useEffect(() => {
     const handler = (e: Event) => {
@@ -1300,7 +1314,7 @@ export function DiaryScreen({
         </div>
       )}
 
-      <div className="px-3 pt-2 flex flex-col gap-3 pb-56">
+      <div className="px-3 pt-2 flex flex-col gap-3 pb-28">
         {/* 1. Project / Site / Day / Date -------------------------------- */}
         <SectionCard
           id="sec-project"
@@ -1661,67 +1675,59 @@ export function DiaryScreen({
         </SectionCard>
       </div>
 
-      {/* ===== sticky action bar (6.5) ===== */}
+      {/* ===== end-of-report marker + sticky action bar (6.5) ===== */}
+      <div ref={endRef} data-testid="report-end" aria-hidden className="h-1 w-full" />
       <div
         className="fixed left-0 right-0 z-40 p-2 px-3"
+        data-testid="action-bar"
+        data-open={atEnd ? "true" : "false"}
         style={{
           bottom: 0,
           paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
           background: "var(--surface)",
           borderTop: "1px solid var(--rule)",
+          transform: atEnd ? "translateY(0)" : "translateY(110%)",
+          visibility: atEnd ? "visible" : "hidden",
+          transition: "transform 160ms ease-out",
         }}
       >
-        <div className="max-w-3xl mx-auto flex flex-col gap-2">
-          <button
-            type="button"
-            className="chip w-full justify-center"
-            data-testid="jump-to-section"
-            onClick={() => setJumpOpen(true)}
-          >
-            <Icon name="list" size={16} />
-            Jump to section
-          </button>
-          <div className="flex flex-wrap gap-2">
-            <StatusChip
-              done={complete.weather}
-              label="Weather"
-              active={activeSection === "sec-weather"}
-              onJump={() => scrollTo("sec-weather")}
-            />
-            <StatusChip
-              done={complete.workforce}
-              label="Workforce"
-              active={activeSection === "sec-workforce"}
-              onJump={() => scrollTo("sec-workforce")}
-            />
-            <StatusChip
-              done={complete.wip}
-              label="Work in progress"
-              active={activeSection === "sec-wip"}
-              onJump={() => scrollTo("sec-wip")}
-            />
-            <StatusChip
-              done={complete.recorded}
-              label="Recorded by"
-              active={activeSection === "sec-recorded"}
-              onJump={() => scrollTo("sec-recorded")}
-            />
-          </div>
+        <div className="max-w-3xl mx-auto flex items-stretch gap-2">
           <button
             type="button"
             data-testid="create-pdf"
             disabled={building}
-            className="w-full font-display text-xl"
+            className="flex-1 font-display text-xl"
             style={{
               minHeight: 56,
               borderRadius: 14,
               background: "var(--accent)",
               color: "var(--on-accent)",
               border: 0,
+              opacity: building ? 0.7 : 1,
             }}
             onClick={() => void createPdf()}
           >
             {building ? "Building…" : "Create PDF"}
+          </button>
+          <button
+            type="button"
+            data-testid="jump-to-section"
+            aria-label="More report options"
+            aria-haspopup="dialog"
+            className="btn-56 shrink-0"
+            style={{
+              width: 56,
+              borderRadius: 14,
+              background: "var(--surface)",
+              color: "var(--text)",
+              border: "1px solid var(--rule)",
+            }}
+            onClick={() => {
+              tick();
+              setJumpOpen(true);
+            }}
+          >
+            <Icon name="list" size={22} />
           </button>
         </div>
       </div>
@@ -1821,6 +1827,18 @@ export function DiaryScreen({
                 </span>
               </button>
             ))}
+            <button
+              type="button"
+              className="btn-56 w-full px-4 justify-center mt-2"
+              data-testid="leave-report"
+              style={{ border: "1px solid var(--rule)" }}
+              onClick={() => {
+                setJumpOpen(false);
+                goAllReports();
+              }}
+            >
+              ← Leave this report
+            </button>
           </div>
         )}
       </SheetWrap>
@@ -1965,48 +1983,6 @@ function defaultHours(name: string): number {
     Generator: 8,
   };
   return map[name] ?? 8;
-}
-
-function StatusChip({
-  done,
-  label,
-  active,
-  onJump,
-}: {
-  done: boolean;
-  label: string;
-  active?: boolean;
-  onJump: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        tick();
-        onJump();
-      }}
-      data-active={active ? "true" : "false"}
-      aria-label={`${label}: ${done ? "complete" : "not yet"} — jump to section`}
-      className="chip shrink-0"
-      style={{ fontSize: 13 }}
-    >
-      {done ? (
-        <Icon name="check" size={16} />
-      ) : (
-        <span
-          aria-hidden
-          style={{
-            width: 10,
-            height: 10,
-            borderRadius: 999,
-            border: "2px solid currentColor",
-            display: "inline-block",
-          }}
-        />
-      )}
-      {label}
-    </button>
-  );
 }
 
 /* Time-lost reason picker (radiogroup of chips with icon + word). */

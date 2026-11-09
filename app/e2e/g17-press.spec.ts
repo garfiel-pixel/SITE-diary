@@ -1,5 +1,5 @@
 import { test, expect, type Locator } from "@playwright/test";
-import { activateDb, copyFromYesterday, openSection } from "./helpers";
+import { activateDb, copyFromYesterday, openSection, revealReportActions } from "./helpers";
 
 const SECTION_IDS = [
   "sec-project",
@@ -92,6 +92,7 @@ test.describe("G17 — press feedback", () => {
 
     await pressScale(page, page.getByTestId("theme-toggle"));
     await pressScale(page, page.locator("#sec-project > h2 > button"));
+    await revealReportActions(page);
     await pressScale(page, page.getByTestId("create-pdf"));
     console.log("G17: btn-56, section header and export chip all scale on pointer-down");
 

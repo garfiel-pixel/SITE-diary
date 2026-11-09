@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import {
   activate,
   openSection,
+  revealReportActions,
   setDate,
   setRecordedBy,
   TODAY_ISO,
@@ -84,6 +85,7 @@ test.describe("G8 — accessibility", () => {
 
     // ---- result sheet --------------------------------------------------
     await setRecordedBy(page, "K. Johnson");
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     // A blank report trips the completeness guard by design, so continue
     // through "Create PDF anyway" to reach the result sheet.

@@ -9,6 +9,7 @@ import {
   getReportForDate,
   iso,
   openSection,
+  revealReportActions,
   setDate,
   setRecordedBy,
   TODAY,
@@ -217,6 +218,7 @@ test.describe("G14 — named workforce", () => {
     // ---- PDF contains names, roles and present list ---------------------
     await setRecordedBy(page, "K. Johnson");
     await completeRequiredSections(page);
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     await expect(page.getByTestId("pdf-state")).toBeVisible({ timeout: 180_000 });
     const [download] = await Promise.all([

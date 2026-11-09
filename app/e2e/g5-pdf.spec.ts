@@ -6,6 +6,7 @@ import {
   completeRequiredSections,
   copyFromYesterday,
   openSection,
+  revealReportActions,
   setRecordedBy,
   TODAY_ISO,
   waitForPhotoCount,
@@ -113,6 +114,7 @@ test.describe("G5 — PDF", () => {
     await pad.getByRole("button", { name: "5", exact: true }).click();
     await pad.getByRole("button", { name: "Done" }).click();
 
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     await expect(page.getByTestId("pdf-state")).toBeVisible({ timeout: 120_000 });
 
@@ -155,6 +157,7 @@ test.describe("G5 — PDF", () => {
     await gallery.setInputFiles(files);
     await waitForPhotoCount(page, TODAY_ISO, 30, 240_000);
 
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     await expect(page.getByTestId("pdf-state")).toBeVisible({ timeout: 180_000 });
     const [stressDownload] = await Promise.all([

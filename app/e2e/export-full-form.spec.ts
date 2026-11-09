@@ -5,6 +5,7 @@ import {
   activate,
   copyFromYesterday,
   openSection,
+  revealReportActions,
   setRecordedBy,
   TODAY_ISO,
   waitForPhotoCount,
@@ -150,6 +151,7 @@ test.describe("Full form → PDF export", () => {
     await waitSaved(page);
 
     // Export — no error state, real download, every section represented.
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     await expect(page.getByTestId("pdf-state")).toBeVisible({ timeout: 180_000 });
     await expect(page.getByTestId("pdf-error")).toHaveCount(0);

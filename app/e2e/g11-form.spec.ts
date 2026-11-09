@@ -4,6 +4,7 @@ import {
   copyFromYesterday,
   getReportForDate,
   openSection,
+  revealReportActions,
   TODAY_ISO,
   waitSaved,
 } from "./helpers";
@@ -122,6 +123,7 @@ test.describe("G11 — form completeness (400 × 800)", () => {
     console.log("G11 400×800 with every section open: no horizontal scroll");
 
     // ---- Recorded by empty blocks the PDF -------------------------------
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     await expect(page.getByRole("alert")).toContainText("Recorded by is required");
     await expect(page.getByRole("dialog", { name: "Report ready" })).toHaveCount(0);

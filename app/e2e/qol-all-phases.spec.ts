@@ -3,6 +3,7 @@ import {
   activateDb,
   copyFromYesterday,
   openSection,
+  revealReportActions,
   setRecordedBy,
   waitSaved,
   TODAY_ISO,
@@ -29,6 +30,7 @@ test.describe("QOL — Phase 1–3", () => {
     await page.getByRole("button", { name: "Start a blank report" }).click();
     await setRecordedBy(page, "Tester");
     // Leave project/site/weather/workforce/wip empty.
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     const warning = page.getByTestId("pdf-warning");
     await expect(warning).toBeVisible();
@@ -92,6 +94,7 @@ test.describe("QOL — Phase 1–3", () => {
     // Dismiss the copy-from-yesterday snackbar so it does not intercept taps.
     const dismiss = page.getByRole("button", { name: "Dismiss" });
     if (await dismiss.isVisible().catch(() => false)) await dismiss.click();
+    await revealReportActions(page);
     await page.getByTestId("jump-to-section").click();
     const sheet = page.getByRole("dialog", { name: "Jump to section" });
     await expect(sheet).toBeVisible();

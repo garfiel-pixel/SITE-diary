@@ -4,6 +4,7 @@ import {
   copyFromYesterday,
   openSection,
   readAudit,
+  revealReportActions,
   startAudit,
 } from "./helpers";
 
@@ -27,6 +28,7 @@ test.describe("Typing audit — sample-equivalent report on a new day", () => {
     await openSection(page, "sec-recorded");
     await page.getByRole("button", { name: "Use K. Johnson?" }).click();
 
+    await revealReportActions(page);
     await page.getByTestId("create-pdf").click();
     await expect(page.getByTestId("pdf-state")).toBeVisible({ timeout: 120_000 });
 

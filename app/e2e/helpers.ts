@@ -211,6 +211,14 @@ export async function waitForPhotoCount(page: Page, isoDate: string, expected: n
   }
 }
 
+/** Scrolls to the end of the report so the bottom action bar (Create PDF and
+ *  the options button) is on screen. The bar is hidden until then so it never
+ *  covers a section that is being filled in. */
+export async function revealReportActions(page: Page) {
+  await page.getByTestId("report-end").scrollIntoViewIfNeeded();
+  await expect(page.getByTestId("create-pdf")).toBeVisible({ timeout: 10_000 });
+}
+
 /** Starts today's report by copying yesterday (the demo path). */
 export async function copyFromYesterday(page: Page) {
   if (!(await page.locator("#sec-project, #newday-card").count())) {
