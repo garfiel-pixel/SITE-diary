@@ -28,6 +28,9 @@ test.describe("Full form → PDF export", () => {
     // 1. Project / site — the owner's long title is the layout stress case.
     await openSection(page, "sec-project");
     await page.locator("#mi-project").fill(PROJECT);
+    // The copied site is a linear "A to B" value, so the field opens in
+    // linear mode; switch to zone mode so the whole address goes in one field.
+    await page.getByTestId("site-mode-zone").click();
     await page.locator("#mi-site").fill(SITE);
     await page.locator("#mi-site").blur();
     await expect(page.locator("#mi-project")).toHaveValue(PROJECT);

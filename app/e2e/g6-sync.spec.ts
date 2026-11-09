@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   activate,
+  completeRequiredSections,
   copyFromYesterday,
   getReportForDate,
   setRecordedBy,
@@ -33,6 +34,7 @@ test.describe("G6 — offline PWA + mock upload", () => {
 
     await copyFromYesterday(page);
     await setRecordedBy(page, "K. Johnson");
+    await completeRequiredSections(page);
 
     await context.setOffline(true);
     console.log("G6 offline: context.setOffline(true)");

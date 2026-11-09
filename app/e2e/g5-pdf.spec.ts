@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   activateDb,
+  completeRequiredSections,
   copyFromYesterday,
   openSection,
   setRecordedBy,
@@ -96,6 +97,10 @@ test.describe("G5 — PDF", () => {
     await activateDb(page);
     await copyFromYesterday(page);
     await setRecordedBy(page, "K. Johnson");
+
+    // The PDF guard needs weather (AM + PM) and work in progress, which
+    // "copy from yesterday" deliberately does not carry.
+    await completeRequiredSections(page);
 
     // A material with the m³ glyph, to prove the embedded font covers it.
     await openSection(page, "sec-materials");

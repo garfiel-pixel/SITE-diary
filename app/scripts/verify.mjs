@@ -110,9 +110,15 @@ if (!fs.existsSync(fixtures) || fs.readdirSync(fixtures).filter((f) => f.endsWit
 // ------------------------------------------------------ Playwright ------
 console.log("\n== G3-G14 Playwright ==");
 const jsonPath = path.join(ART, "playwright.json");
+/* Remove the previous report first: if this run crashes, the gates must fail
+   rather than grade last week's results. */
+fs.rmSync(jsonPath, { force: true });
 const pw = run("npx", ["playwright", "test", "--reporter=json"], {
   env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: jsonPath },
 });
+if (pw.status !== 0) {
+  console.error(`playwright exited ${pw.status}`);
+}
 let specs = [];
 if (fs.existsSync(jsonPath)) {
   const report = JSON.parse(fs.readFileSync(jsonPath, "utf8"));

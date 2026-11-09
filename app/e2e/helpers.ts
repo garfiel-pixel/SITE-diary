@@ -83,6 +83,25 @@ export async function openSection(page: Page, id: string) {
   await expect(header).toHaveAttribute("aria-expanded", "true");
 }
 
+/** Fills the sections the PDF guard requires before Create PDF: weather for
+ *  AM and PM, and work in progress. "Copy from yesterday" deliberately
+ *  carries neither, so specs that expect the result sheet complete them
+ *  first instead of hitting the "Report incomplete" sheet. */
+export async function completeRequiredSections(page: Page) {
+  await openSection(page, "sec-weather");
+  await page.getByRole("radio", { name: "A.M. Clear", exact: true }).click();
+  await page.getByRole("radio", { name: "P.M. Showers", exact: true }).click();
+  await openSection(page, "sec-wip");
+  const wip = page.locator("#sec-wip textarea");
+  if (!(await wip.inputValue()).trim()) {
+    await page
+      .locator("#sec-wip")
+      .getByRole("button", { name: "Work in progress: add Asphalt laying" })
+      .click();
+  }
+  await waitSaved(page);
+}
+
 export async function setRecordedBy(page: Page, name: string) {
   await openSection(page, "sec-recorded");
   const input = page.getByTestId("recorded-by");

@@ -11,11 +11,16 @@ import {
 
 test.describe("G3 — Dexie persistence + offline", () => {
   test("fill, reload, offline edit, reload — data intact", async ({ page, context }) => {
+    // Three reloads, each waiting for the service worker, need headroom.
+    test.setTimeout(180_000);
     await activate(page);
     await copyFromYesterday(page);
 
     await openSection(page, "sec-project");
     const project = page.locator("#mi-project");
+    // The copied site is a linear "A to B" value, so the field opens in
+    // linear mode; switch to zone mode to type one location.
+    await page.getByTestId("site-mode-zone").click();
     const site = page.locator("#mi-site");
     await project.fill("G3 Persistence Project");
     await site.fill("Chainage 9+999");

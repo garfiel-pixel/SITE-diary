@@ -22,12 +22,35 @@ const fonts = {
   },
 };
 
-// Downscale again to <=1200px for a WhatsApp-sized report (< 8 MB).
-async function toImageRef(photo: PhotoRow): Promise<[string, number]> {
+/* Layout geometry. A4 is 595 pt wide; the 36 pt side margins leave 523 pt of
+   content, so a two-up cell is ~257 pt. Photos fill their cell instead of
+   sitting letterboxed inside a fixed 215×160 box, and a report with a single
+   photo gets the full page width. */
+const CONTENT_W = 523;
+const COL_GAP = 8;
+const TWO_UP_W = (CONTENT_W - COL_GAP) / 2;
+/* Height caps keep one photo plus its caption from pushing the next block to a
+   new page: two blocks (image + caption) still fit a page of content. */
+const MAX_H_TWO_UP = 300;
+const MAX_H_SOLO = 380;
+
+/** Box that fills `boxW` while keeping the photo's own shape. */
+function photoBox(aspect: number, boxW: number, maxH: number): [number, number] {
+  const h = boxW / aspect;
+  if (h <= maxH) return [Math.round(boxW), Math.round(h)];
+  return [Math.round(maxH * aspect), Math.round(maxH)];
+}
+
+// Downscale again for a WhatsApp-sized report (< 8 MB). Full-width photos keep
+// more pixels because the same image is printed much larger.
+async function toImageRef(
+  photo: PhotoRow,
+  maxEdge = 1200
+): Promise<{ ref: string; aspect: number }> {
   const bmp = await createImageBitmap(photo.blob, {
     imageOrientation: "from-image",
   });
-  const s = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+  const s = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * s);
   const h = Math.round(bmp.height * s);
   const c = document.createElement("canvas");
@@ -40,8 +63,7 @@ async function toImageRef(photo: PhotoRow): Promise<[string, number]> {
   );
   const name = `p${photo.id}`;
   photoImages[name] = await blobToDataUrl(blob);
-  const kb = blob.size / 1024;
-  return [name, kb];
+  return { ref: name, aspect: w / h };
 }
 
 const photoImages: Record<string, string> = {};
@@ -355,22 +377,27 @@ export async function buildPdf(r: Report, photos: PhotoRow[]): Promise<PdfResult
       ),
       ...singles.map((row) => ({ row, group: null })),
     ];
-    for (let i = 0; i < ordered.length; i += 2) {
+    /* A lone photo is printed full width; anything else is two-up, both
+       filling their cell. */
+    const solo = ordered.length === 1;
+    const boxW = solo ? CONTENT_W : TWO_UP_W;
+    const maxH = solo ? MAX_H_SOLO : MAX_H_TWO_UP;
+    for (let i = 0; i < ordered.length; i += solo ? 1 : 2) {
       const cells: Doc[] = [];
-      for (const cell of [ordered[i], ordered[i + 1]]) {
+      for (const cell of solo ? [ordered[i]] : [ordered[i], ordered[i + 1]]) {
         if (!cell) {
           cells.push({ text: "" });
           continue;
         }
-        const [ref] = await toImageRef(cell.row);
+        const { ref, aspect } = await toImageRef(cell.row, solo ? 1600 : 1200);
         const caption = cell.group
           ? cell.group[0]?.description
           : cell.row.description;
         cells.push({
           stack: [
-            { image: ref, fit: [215, 160] },
+            { image: ref, fit: photoBox(aspect, boxW, maxH) },
             caption
-              ? { text: caption, fontSize: 8.5, italic: false, margin: [2, 2, 0, 2] }
+              ? { text: caption, fontSize: 8.5, italic: false, margin: [2, 3, 0, 2] }
               : { text: "" },
           ],
           unbreakable: true,
@@ -378,9 +405,9 @@ export async function buildPdf(r: Report, photos: PhotoRow[]): Promise<PdfResult
       }
       content.push({
         columns: cells,
-        columnGap: 8,
+        columnGap: COL_GAP,
         dontBreakRows: true,
-        margin: [0, 4],
+        margin: [0, 5, 0, 5],
       });
     }
   }

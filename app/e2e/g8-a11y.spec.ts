@@ -85,6 +85,9 @@ test.describe("G8 — accessibility", () => {
     // ---- result sheet --------------------------------------------------
     await setRecordedBy(page, "K. Johnson");
     await page.getByTestId("create-pdf").click();
+    // A blank report trips the completeness guard by design, so continue
+    // through "Create PDF anyway" to reach the result sheet.
+    await page.getByTestId("pdf-warning-create").click();
     await expect(page.getByTestId("pdf-state")).toBeVisible({ timeout: 120_000 });
     await scan(page, "result sheet (light)");
     await page.locator('.k-sheet[data-open="true"]').click({ position: { x: 4, y: 4 } });
