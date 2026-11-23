@@ -49,26 +49,26 @@
     "dexie": "4.4.7",
     "dexie-react-hooks": "4.4.0",
     "konsta": "5.5.0",
-    "pdfmake": "0.3.13",
+    "pdfmake": "0.3.14",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
-    "@napi-rs/canvas": "1.1.0",
-    "@playwright/test": "1.64.1",
-    "@tailwindcss/vite": "4.3.4",
+    "@napi-rs/canvas": "1.1.1",
+    "@playwright/test": "1.65.1",
+    "@tailwindcss/vite": "4.3.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.2.1",
+    "@vitejs/plugin-react": "6.3.0",
     "lighthouse": "13.6.0",
     "pdfjs-dist": "6.5.438",
     "sharp": "0.35.5",
-    "tailwindcss": "4.3.4",
+    "tailwindcss": "4.3.5",
     "typescript": "5.9.3",
-    "vite": "8.3.5",
+    "vite": "8.3.8",
     "vite-plugin-pwa": "2.0.0",
     "workbox-window": "7.4.1",
-    "wrangler": "4.157.0"
+    "wrangler": "4.165.0"
   }
 }
