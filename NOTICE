@@ -1,0 +1,50 @@
+# Notice
+
+## Ownership
+
+This repository is owned and maintained by **garfiel-pixel**.
+
+Copyright © 2026 garfiel-pixel. All rights reserved.
+
+The software is proprietary. See [LICENSE](LICENSE).
+
+## Brand assets
+
+The Pave-Con name, logo, and supplied brand artwork are the property of their
+respective owner. They are included in this repository for the client project
+and are **not** licensed for reuse by the software licence. Do not extract,
+redistribute, or reuse the logo or brand assets outside this project without
+permission from the brand owner.
+
+The logo file is used byte-for-byte and is not redrawn or re-encoded.
+
+## Third-party software
+
+This project depends on open-source packages. Exact versions are pinned in
+[`app/package.json`](app/package.json). Each package remains under its own
+licence, including (non-exhaustive):
+
+| Component | Licence family |
+|---|---|
+| React, React DOM | MIT |
+| Vite, Vitest ecosystem | MIT |
+| TypeScript | Apache-2.0 |
+| Tailwind CSS | MIT |
+| Konsta UI | MIT |
+| Dexie, dexie-react-hooks | Apache-2.0 |
+| pdfmake | MIT |
+| Barlow, Barlow Condensed fonts | SIL Open Font License 1.1 |
+| Playwright | Apache-2.0 |
+| axe-core | MPL-2.0 |
+| Lighthouse | Apache-2.0 |
+| sharp | Apache-2.0 |
+| Workbox / vite-plugin-pwa | MIT |
+
+This table is a summary, not legal advice. Before distributing a build, review
+the licence texts shipped with the exact dependency versions and retain any
+required notices.
+
+## Sample content
+
+Project names, people, and contact details used in the demo are fictional or
+client-supplied. They are not independently verified.

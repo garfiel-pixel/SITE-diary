@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/garfiel-pixel/SITE-diary/security/advisories/new
+    about: Report security issues privately. Do not open a public issue.
+  - name: Scalability plan
+    url: https://github.com/garfiel-pixel/SITE-diary/blob/main/docs/SCALABILITY_PLAN.md
+    about: Read the funded backend plan before proposing backend work.
+  - name: Owner profile
+    url: https://github.com/garfiel-pixel
+    about: Contact the maintainer.

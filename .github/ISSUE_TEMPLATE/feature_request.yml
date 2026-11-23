@@ -1,0 +1,57 @@
+name: Feature request
+description: Suggest a change that fits the project scope.
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read `docs/SCALABILITY_PLAN.md` and `docs/BACKLOG.md` first. Out-of-scope
+        ideas belong in the backlog, not in the current build.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard, slow, or missing today? Describe the site workflow, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should happen? Keep it small enough to test.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Current demo (no backend)
+        - Funded backend phase
+        - Backlog / future
+        - Documentation only
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or examples
+      description: A sketch, a paper form, a screenshot, or a measurement.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and the backlog.
+          required: true
+        - label: This does not require real client data to demonstrate.
+          required: true

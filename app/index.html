@@ -7,33 +7,50 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="theme-color" content="#0B0B0B" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Offline-first daily site diary for Pave-Con Ltd — paving and construction. Capture weather, workforce, equipment, work in progress and photos, then generate a branded PDF."
+    />
+    <meta name="author" content="garfiel-pixel" />
+    <meta
+      name="keywords"
+      content="site diary, construction, paving, daily report, offline PWA, PDF"
+    />
+    <link rel="canonical" href="https://site-diary.garfieldprocis.workers.dev/" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192.png" />
+    <link rel="apple-touch-icon" href="/pwa-192.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Pave-Con Site Diary" />
+    <meta property="og:title" content="Pave-Con — Masterbuilders Site Diary" />
+    <meta
+      property="og:description"
+      content="A phone-first, offline-capable site diary for paving and construction. Works without a network; exports a branded PDF."
+    />
+    <meta property="og:url" content="https://site-diary.garfieldprocis.workers.dev/" />
+    <meta
+      property="og:image"
+      content="https://site-diary.garfieldprocis.workers.dev/brand/logo.jpg"
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Pave-Con — Masterbuilders Site Diary" />
+    <meta
+      name="twitter:description"
+      content="Offline-first daily site diary for paving and construction, with a branded PDF export."
+    />
+    <meta
+      name="twitter:image"
+      content="https://site-diary.garfieldprocis.workers.dev/brand/logo.jpg"
+    />
+
     <!-- Same logo artwork as src/assets/brand/logo.jpg, started with the HTML
          so it is not discovered only after React mounts (LCP). -->
     <link rel="preload" as="image" href="/brand/logo.jpg" fetchpriority="high" />
     <title>Pave-Con — Masterbuilders Site Diary</title>
-    <script>
-      // Pre-paint theme flag. This tiny localStorage key is the only
-      // non-Dexie store in the whole app (css-first paint, no flash).
-      (function () {
-        try {
-          var pref =
-            localStorage.getItem("pavecon-theme") || "auto"; /* auto | light | dark */
-          var dark =
-            pref === "dark" ||
-            (pref === "auto" &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches);
-          var el = document.documentElement;
-          if (dark) {
-            el.classList.add("dark");
-            el.dataset.theme = "dark";
-          } else {
-            el.dataset.theme = "light";
-          }
-        } catch (e) {
-          /* private mode: keep light */
-        }
-      })();
-    </script>
+    <!-- External (not inline) so the production CSP can use script-src 'self'.
+         Classic blocking script in <head>: runs before first paint. -->
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>

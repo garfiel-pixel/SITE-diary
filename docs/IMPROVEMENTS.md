@@ -234,11 +234,11 @@ The chunk is dominated by two base64-embedded Barlow TTFs (`app/src/pdf/pdfFonts
 
 ---
 
-## 13. The sample seed can be interrupted mid-write (found 2026-11-09)
+## 13. The sample seed can be interrupted mid-write (found 2026-11-09) — **FIXED 2026-11-23**
 
-`seedIfNeeded()` inserts the sample report first and then writes its three placeholder photos in a loop. The guard is `if (count > 0) return`, so any interruption after the report row lands (most easily a reload while activation is being written, which is exactly what the e2e helpers do) leaves a permanently partial sample: the next boot sees one report and skips seeding, so the remaining photos never appear. A full-suite run caught this as a carousel showing 1 photo instead of 3.
+`seedIfNeeded()` used to insert the sample report first, then write its three placeholder photos in a loop. The guard `if (count > 0) return` meant any interruption after the report row landed left a permanently partial sample.
 
-Fix options: write the photos before the report row so the row is the last write; or store a `seedComplete` setting and, when it is missing, finish the missing photos on boot. Until then the QOL carousel spec asserts against the photo set actually on screen.
+**Fix applied:** generate the blobs first, then write the report and its photos in one Dexie transaction (`db.transaction("rw", db.reports, db.photos, ...)`). A reload during first-run seeding can no longer leave a report without photos. The QOL carousel gate now passes reliably.
 
 ## Suggested order
 

@@ -3,6 +3,32 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "description": "Offline-first daily site diary for Pave-Con Ltd — React PWA with a branded PDF export.",
+  "author": "garfiel-pixel (https://github.com/garfiel-pixel)",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/garfiel-pixel/SITE-diary#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/garfiel-pixel/SITE-diary.git",
+    "directory": "app"
+  },
+  "bugs": {
+    "url": "https://github.com/garfiel-pixel/SITE-diary/issues"
+  },
+  "keywords": [
+    "site-diary",
+    "construction",
+    "paving",
+    "offline-first",
+    "pwa",
+    "react",
+    "typescript",
+    "indexeddb",
+    "pdfmake"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

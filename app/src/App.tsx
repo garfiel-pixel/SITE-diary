@@ -12,6 +12,7 @@ import { DiaryScreen } from "./diary/DiaryScreen";
 import { Home } from "./Home";
 import { SheetWrap } from "./components/SheetWrap";
 import { UndoSnackbar } from "./components/UndoSnackbar";
+import { OwnerCredit } from "./components/OwnerCredit";
 import { useUndo } from "./components/undo";
 import { Icon, ALL_ICONS } from "./icons";
 import { useRoute, replaceReport } from "./lib/route";
@@ -294,6 +295,11 @@ function MainShell({
           {CONFIG.contact.phone} · {CONFIG.contact.email}
         </p>
         <p className="opacity-60 mt-2 text-xs">{CONFIG.contactNote}</p>
+        {/* Author credit: bottom-right of the footer, never competing with
+            the client brand. Hidden from print by the print stylesheet. */}
+        <div className="mt-4 flex justify-end">
+          <OwnerCredit className="no-print" />
+        </div>
       </footer>
 
       <SettingsSheet

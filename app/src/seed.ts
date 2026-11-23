@@ -8,6 +8,7 @@ import {
   type WorkforcePerson,
   type EquipmentRow,
   type MaterialRow,
+  type PhotoRow,
 } from "./db";
 
 export const SEED = {
@@ -231,12 +232,13 @@ export async function seedIfNeeded() {
     syncState: "draft",
     updatedAt: Date.now(),
   };
-  await db.reports.put(sample);
-
-  // Sample photos (neutral placeholders generated in code)
+  /* Generate the placeholder blobs before touching the database, then write
+     the report and its photos in one Dexie transaction. A reload during
+     seeding can no longer leave a sample report with zero photos. */
+  const samplePhotos: PhotoRow[] = [];
   for (const [i, label] of ["SAMPLE A", "SAMPLE B", "SAMPLE C"].entries()) {
     const blob = await makePlaceholderPhoto(label);
-    await db.photos.put({
+    samplePhotos.push({
       id: crypto.randomUUID(),
       reportId: sample.id,
       groupId: null,
@@ -247,6 +249,11 @@ export async function seedIfNeeded() {
       takenAt: Date.now() - (2 - i) * 60000,
     });
   }
+
+  await db.transaction("rw", db.reports, db.photos, async () => {
+    await db.reports.put(sample);
+    for (const photo of samplePhotos) await db.photos.put(photo);
+  });
 
   // pre-seed memo counts so chips have an order from day one
   for (const e of equipment)

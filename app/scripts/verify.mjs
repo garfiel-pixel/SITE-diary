@@ -188,10 +188,14 @@ const iconsSrc = fs.readFileSync(path.join(ROOT, "src", "icons", "index.tsx"), "
 const hardCoded = iconsSrc.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
 record(
   "G2",
-  fs.existsSync(path.join(ART, "icons.png")) && hardCoded.length === 0,
+  artRes.status === 0 &&
+    fs.existsSync(path.join(ART, "icons.png")) &&
+    hardCoded.length === 0,
   hardCoded.length
     ? `hard-coded colours in icon set: ${hardCoded.join(", ")}`
-    : "icon sheet rendered at 24/48 px in light and dark; colours via CSS variables",
+    : artRes.status === 0
+      ? "icon sheet rendered at 24/48 px in light and dark; colours via CSS variables"
+      : "artifact script failed; icons.png may be stale",
   rel(path.join(ART, "icons.png"))
 );
 

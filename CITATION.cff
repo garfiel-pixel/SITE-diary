@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you reference this project, cite it using the metadata below."
+title: "Masterbuilders Site Diary"
+abstract: >-
+  A phone-first, offline-capable daily site diary for a paving and construction
+  crew. The app follows the paper form, minimises typing, stores reports locally
+  in IndexedDB, and generates a branded PDF. This repository is a working demo;
+  the cloud backend is a funded, planned phase.
+type: software
+authors:
+  - name: "garfiel-pixel"
+    website: "https://github.com/garfiel-pixel"
+repository-code: "https://github.com/garfiel-pixel/SITE-diary"
+url: "https://site-diary.garfieldprocis.workers.dev"
+version: "1.0.0"
+date-released: "2026-11-04"
+keywords:
+  - site diary
+  - construction
+  - paving
+  - offline-first
+  - progressive web app
+  - react
+  - typescript
+  - indexeddb
+  - pdf
+  - cloudflare workers

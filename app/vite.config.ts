@@ -26,10 +26,12 @@ export default defineConfig({
       registerType: "prompt", // never reload under someone mid-form
       includeAssets: ["brand/logo.jpg"],
       manifest: {
+        id: "/",
         name: "Pave-Con Site Diary",
         short_name: "Site Diary",
         description:
           "Daily site diary for Pave-Con Ltd — paving & construction. Works offline.",
+        categories: ["business", "productivity"],
         start_url: "/",
         scope: "/",
         display: "standalone",

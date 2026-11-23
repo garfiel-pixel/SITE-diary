@@ -74,11 +74,11 @@ async function main() {
   await page.getByRole("button", { name: "ACTIVATE" }).click();
   await page.waitForSelector("[data-testid=app-header]", { timeout: 20_000 });
 
-  // Show the sample report (yesterday) for the screenshots.
+  // Show the sample report (yesterday) for the screenshots. The app now
+  // launches on Home, so navigate by route instead of expecting a Date field.
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const dateInput = page.locator('input[aria-label="Date"]').first();
-  await dateInput.fill(iso(yesterday));
+  await page.goto(`http://localhost:4173/#/report/${iso(yesterday)}`);
   await page.waitForSelector("#sec-project", { timeout: 15_000 });
   await page.waitForTimeout(500);
 
@@ -128,8 +128,11 @@ async function main() {
   await waitFor("http://localhost:5174/icons");
   const iconBrowser = await chromium.launch();
   const iconPage = await iconBrowser.newPage({ viewport: { width: 1500, height: 900 } });
-  await iconPage.goto("http://localhost:5174/icons");
-  await iconPage.waitForSelector("[data-testid=icon-sheet-light]");
+  await iconPage.goto("http://localhost:5174/icons", {
+    waitUntil: "domcontentloaded",
+    timeout: 120_000,
+  });
+  await iconPage.waitForSelector("[data-testid=icon-sheet-light]", { timeout: 120_000 });
   await iconPage.screenshot({ path: path.join(ART, "icons.png"), fullPage: true });
   await iconBrowser.close();
   console.log("artifacts: icons.png");

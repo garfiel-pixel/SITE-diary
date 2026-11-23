@@ -1077,7 +1077,10 @@ export function DiaryScreen({
     const el = endRef.current;
     if (!el) return;
     const io = new IntersectionObserver(([entry]) => setAtEnd(!!entry?.isIntersecting), {
-      rootMargin: "0px 0px -8px 0px",
+      /* Show the bar when the end marker reaches the viewport edge. A negative
+         bottom margin hid it at maximum scroll once the footer grew: the 1px
+         marker sat inside the 8px cut and the user could not scroll further. */
+      rootMargin: "0px",
     });
     io.observe(el);
     return () => io.disconnect();

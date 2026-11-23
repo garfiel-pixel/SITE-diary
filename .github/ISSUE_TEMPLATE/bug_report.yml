@@ -1,0 +1,83 @@
+name: Bug report
+description: Report something that is broken or does not match the paper form.
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not include worker names, client data, or
+        photos of identifiable people. For a security issue, use the private
+        process in SECURITY.md instead of this form.
+  - type: input
+    id: version
+    attributes:
+      label: Build / commit
+      description: The commit SHA, release tag, or deployment URL.
+      placeholder: "e.g. cd3c270 or https://site-diary.garfieldprocis.workers.dev"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Daily report form
+        - Workforce
+        - Equipment
+        - Photos
+        - PDF export
+        - Offline / PWA
+        - Activation gate
+        - Accessibility
+        - Build / scripts
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, starting from a fresh load where possible.
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: "e.g. Pixel 7 / Chrome 140, iPhone 15 / Safari 18"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or logs
+      description: Drag files here. Remove personal data first.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I removed personal or client data from this report.
+          required: true

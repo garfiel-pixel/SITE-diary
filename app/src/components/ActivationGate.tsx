@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { CONFIG } from "../config";
 import { setSetting } from "../db";
 import { Icon } from "../icons";
+import { OwnerCredit } from "./OwnerCredit";
 const logoUrl = "/brand/logo.jpg";
 
 const DEMO_CODE = CONFIG.activation.exampleCode;
@@ -86,7 +87,7 @@ export function ActivationGate() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-6"
+      className="relative min-h-screen flex flex-col items-center justify-center p-6 pb-20"
       style={{ background: "var(--band)", color: "var(--on-band)" }}
     >
       <div
@@ -189,6 +190,13 @@ export function ActivationGate() {
       <p className="mt-10 text-xs max-w-80 text-center" style={{ color: "#8a8a8a" }}>
         Demo gate — not security. Reports stay on this phone.
       </p>
+
+      <div
+        className="absolute bottom-4 right-4"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        <OwnerCredit />
+      </div>
     </div>
   );
 }

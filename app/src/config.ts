@@ -15,6 +15,11 @@ export const CONFIG = {
   contactNote: "Supplied by the client, not independently verified.",
   activation: { exampleCode: "PAVECON-DEMO", storeKey: "activation" },
   brand: { yellow: "#FCE501" }, // measured median of logo yellow pixels
+  owner: {
+    handle: "garfiel-pixel",
+    githubUrl: "https://github.com/garfiel-pixel",
+    repoUrl: "https://github.com/garfiel-pixel/SITE-diary",
+  },
   features: { weatherSuggest: false, dictation: false, haptics: true },
 } as const;
 

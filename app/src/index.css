@@ -934,3 +934,10 @@ table.pdf-preview,
     outline-offset: 2px;
   }
 }
+
+/* Author credit and other chrome stay out of printed reports. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
